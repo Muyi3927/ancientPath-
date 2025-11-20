@@ -1,154 +1,138 @@
+// src/pages/PostDetail.tsx  （覆盖原来的）
+import React, { useState, useEffect, useRef, useContext } from 'react';
+import { useParams, useNavigate, Link } from 'react-router-dom';
+import { format } from 'date-fns';
+import { BlogPost } from '../types';
+import { AuthContext } from '../App';
+import MarkdownRenderer from '../components/MarkdownRenderer';
+import { api } from '../api'; // ← 确保你用了我们之前改好的 api
+import { ArrowLeft, Edit, Share2, Volume2, Type, Minus, Plus, Gauge } from 'lucide-react';
 
-import { BlogPost, UserRole, User, Category } from '../types';
+export const PostDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  const { isAdmin } = useContext(AuthContext);
 
-export const MOCK_USER: User = {
-  id: 'u1',
-  username: 'AdminUser', // 您的笔名
-  role: UserRole.ADMIN,
-  // 您可以将头像图片放在 public/avatar.jpg，然后在这里写 '/avatar.jpg'
-  avatarUrl: 'https://ui-avatars.com/api/?name=Ancient+Path&background=0D8ABC&color=fff'
-};
+  const [post, setPost] = useState<BlogPost | null>(null);
+  const [loading, setLoading] = useState(true);
 
-export const INITIAL_CATEGORIES: Category[] = [
-  { id: 'c1', name: '教义', parentId: null },
-  { id: 'c2', name: '基督论', parentId: 'c1' },
-  { id: 'c3', name: '救恩论', parentId: 'c1' },
-  { id: 'c4', name: '基督徒生活', parentId: null },
-  { id: 'c5', name: '祷告', parentId: 'c4' },
-  { id: 'c6', name: '家庭', parentId: 'c4' },
-  { id: 'c7', name: '教会历史', parentId: null },
-  // 添加新分类：复制上面一行，修改 id 和 name 即可
-];
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const [fontSizeLevel, setFontSizeLevel] = useState(0);
+  const fontClasses = ['prose-lg', 'prose-xl', 'prose-2xl'];
 
-/**
- * 🟢 如何添加新文章 (Git 模式):
- * 
- * 1. 图片上传: 将图片文件(例如 church.jpg)放入项目的 public/ 文件夹中。
- *    在代码中引用时，直接写文件名: '/church.jpg'
- * 
- * 2. 音频上传: 将音频文件(例如 sermon.mp3)放入 public/ 文件夹中。
- *    引用: '/sermon.mp3'
- * 
- * 3. 复制下方的对象结构，粘贴到 INITIAL_POSTS 数组的最上方。
- */
+  useEffect(() => {
+    const fetchPost = async () => {
+      try {
+        const data = await api.getPost(id!);
+        setPost(data);
+      } catch (err) {
+        console.error("文章不存在或加载失败", err);
+        navigate('/'); // 不存在就回首页
+      } finally {
+        setLoading(false);
+      }
+    };
 
-export const INITIAL_POSTS: BlogPost[] = [
-  // === 在这里添加新文章 ===
-  // {
-  //   id: 'new-post-1', // 唯一的ID，不要重复
-  //   title: '这里写标题',
-  //   excerpt: '这里写简短的摘要，显示在卡片上。',
-  //   content: `# 文章标题
-  //
-  //   这里使用 Markdown 格式写正文。
-  //   **加粗**，*斜体*。
-  //   `,
-  //   coverImage: 'https://picsum.photos/800/400', // 或者使用本地图片: '/my-image.jpg'
-  //   author: MOCK_USER,
-  //   createdAt: Date.now(), // 或者写具体的毫秒时间戳
-  //   categoryId: 'c1', // 对应上面的分类 ID
-  //   tags: ['标签1', '标签2'],
-  //   views: 0,
-  //   isFeatured: true, // 是否在首页轮播图显示
-  //   // audioUrl: '/my-sermon.mp3' // 可选：如果有音频
-  // },
-  
-  {
-    id: '1',
-    title: '唯独恩典：改革宗信仰的核心',
-    excerpt: '在救恩的事上，人完全是被动的，完全是上帝恩典的工作。',
-    content: `# 唯独恩典 (Sola Gratia)
+    if (id) fetchPost();
+  }, [id, navigate]);
 
-我们得救是本乎恩，也因着信。这并不是出于自己，乃是上帝所赐的。
+  const handleShare = () => {
+    navigator.clipboard.writeText(window.location.href).then(() => {
+      alert("链接已复制！");
+    });
+  };
 
-## 人的全然败坏
+  const handleSpeedChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    if (audioRef.current) {
+      audioRef.current.playbackRate = parseFloat(e.target.value);
+    }
+  };
 
-自从亚当堕落以来，人就死在过犯罪恶之中...
+  const increaseFont = () => setFontSizeLevel(prev => Math.min(prev + 1, 2));
+  const decreaseFont = () => setFontSizeLevel(prev => Math.max(prev - 1, 0));
 
-## 无条件的拣选
-
-上帝在创立世界以前，在基督里拣选了我们...
-    `,
-    coverImage: 'https://picsum.photos/800/400?random=1',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 2,
-    categoryId: 'c3', // 救恩论
-    tags: ['恩典', '五大唯独', '多特信经'],
-    views: 1540,
-    isFeatured: true,
-    audioUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3' // Sample audio
-  },
-  {
-    id: '2',
-    title: '海德堡要理问答第一问',
-    excerpt: '你唯一的安慰是什么？',
-    content: `# 第一问
-
-**问：** 你在生与死之间，唯一的安慰是什么？
-
-**答：** 在生与死之间，我的身体、灵魂都不属于我自己，乃是属于我信实的救主耶稣基督...
-    `,
-    coverImage: 'https://picsum.photos/800/400?random=2',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 5,
-    categoryId: 'c1', // 教义
-    tags: ['海德堡', '安慰', '教理问答'],
-    views: 920,
-    isFeatured: false
-  },
-  {
-    id: '3',
-    title: '属灵的祷告',
-    excerpt: '如何在圣灵里祷告，寻求上帝的面。',
-    content: `# 祷告的真谛
-
-祷告不是为了改变上帝的旨意，而是为了顺服祂的旨意。
-    `,
-    coverImage: 'https://picsum.photos/800/400?random=3',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 10,
-    categoryId: 'c5', // 祷告
-    tags: ['灵修', '祷告'],
-    views: 3100,
-    isFeatured: true
-  },
-  {
-    id: '4',
-    title: '早期教会的逼迫',
-    excerpt: '鲜血是福音的种子。',
-    content: '早期教会在罗马帝国的压迫下反而更加兴旺...',
-    coverImage: 'https://picsum.photos/800/400?random=4',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 12,
-    categoryId: 'c7',
-    tags: ['历史', '殉道'],
-    views: 450,
-    isFeatured: false
-  },
-  {
-    id: '5',
-    title: '建立家庭祭坛',
-    excerpt: '父亲作为家庭祭司的责任。',
-    content: '家庭敬拜是信仰传承的关键...',
-    coverImage: 'https://picsum.photos/800/400?random=5',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 15,
-    categoryId: 'c6',
-    tags: ['家庭', '敬拜'],
-    views: 600,
-    isFeatured: false
-  },
-  {
-    id: '6',
-    title: '基督的二性',
-    excerpt: '完全的神，完全的人。',
-    content: '迦克墩信经确立了基督神人二性不混合、不改变、不分割、不离散...',
-    coverImage: 'https://picsum.photos/800/400?random=6',
-    author: MOCK_USER,
-    createdAt: Date.now() - 86400000 * 16,
-    categoryId: 'c2',
-    tags: ['基督论', '信经'],
-    views: 780,
-    isFeatured: true
+  if (loading) {
+    return <div className="flex justify-center py-20">加载中...</div>;
   }
-];
+
+  if (!post) {
+    return <div className="text-center py-20 text-slate-500">文章不存在</div>;
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto">
+      {/* 顶部操作栏 */}
+      <div className="flex justify-between items-center mb-8">
+        <Link to="/" className="flex items-center gap-2 text-slate-600 hover:text-primary-600">
+          <ArrowLeft className="w-5 h-5" /> 返回列表
+        </Link>
+
+        <div className="flex items-center gap-4">
+          {isAdmin && (
+            <Link to={`/editor/${post.id}`} className="btn-primary flex items-center gap-2">
+              <Edit className="w-4 h-4" /> 编辑
+            </Link>
+          )}
+          
+          {/* 字体调节 */}
+          <div className="flex items-center bg-white dark:bg-slate-800 rounded-full border p-1">
+            <button onClick={decreaseFont} disabled={fontSizeLevel === 0} className="p-2"><Minus className="w-4 h-4"/></button>
+            <span className="px-2 text-xs">{fontSizeLevel + 1}</span>
+            <button onClick={increaseFont} disabled={fontSizeLevel === 2} className="p-2"><Plus className="w-4 h-4"/></button>
+          </div>
+        </div>
+      </div>
+
+      <article className="bg-white dark:bg-slate-900 rounded-3xl shadow-xl overflow-hidden">
+        {/* 封面 */}
+        {post.coverImage && (
+          <div className="relative h-96">
+            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+            <div className="absolute bottom-8 left-8 text-white">
+              <h1 className="text-4xl md:text-6xl font-bold font-serif">{post.title}</h1>
+              <p className="text-lg mt-2 opacity-90">
+                {format(post.createdAt, 'yyyy年M月d日')} · {post.author.username}
+              </p>
+            </div>
+          </div>
+        )}
+
+        <div className="p-8 md:p-12">
+          {/* 音频播放器 */}
+          {post.audioUrl && (
+            <div className="mb-12 bg-slate-50 dark:bg-slate-800 rounded-2xl p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="flex items-center gap-2 font-bold text-lg">
+                  <Volume2 className="w-5 h-5" /> 收听音频
+                </h3>
+                <select onChange={handleSpeedChange} defaultValue="1" className="text-sm border rounded px-3 py-1">
+                  <option value="0.75">0.75x</option>
+                  <option value="1">1x</option>
+                  <option value="1.25">1.25x</option>
+                  <option value="1.5">1.5x</option>
+                  <option value="2">2x</option>
+                </select>
+              </div>
+              <audio ref={audioRef} controls className="w-full" src={post.audioUrl}>
+                您的浏览器不支持音频。
+              </audio>
+            </div>
+          )}
+
+          {/* 正文 */}
+          <div className={`${fontClasses[fontSizeLevel]} transition-all`}>
+            <MarkdownRenderer content={post.content} />
+          </div>
+
+          {/* 分享按钮 */}
+          <div className="mt-12 text-center">
+            <button onClick={handleShare} className="inline-flex items-center gap-2 btn-secondary">
+              <Share2 className="w-5 h-5" /> 分享这篇文章
+            </button>
+          </div>
+        </div>
+      </article>
+    </div>
+  );
+};
