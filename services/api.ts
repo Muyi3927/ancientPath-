@@ -3,7 +3,7 @@ import { BlogPost, Category, ApiResponse } from '../types';
 // 您的 Cloudflare Worker 地址。
 // 部署后端后，请将其替换为真实的 URL (例如 https://your-worker.your-subdomain.workers.dev)
 // 在本地开发 Worker 时，通常是 http://localhost:8787
-const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || 'https://https://blog.ancientpath.dpdns.org/';
+const API_BASE_URL = (import.meta as any).env?.VITE_API_URL || ' https://ancientpath-backend.fwgudao.workers.dev';
 
 // Helper to handle responses
 async function handleResponse<T>(response: Response): Promise<T> {
