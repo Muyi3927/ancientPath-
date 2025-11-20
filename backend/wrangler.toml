@@ -13,7 +13,6 @@ bucket_name = "lumina-blog-media"
 
 # 允许跨域访问
 [vars]
-[vars]
 # 填写您刚才开启的公开访问网址，必须带 https://
 # 例如: https://pub-123456.r2.dev 或 https://media.yourdomain.com
 R2_PUBLIC_DOMAIN = "https://a2fa598b05e50f0385104298bf70b3d3.r2.cloudflarestorage.com/lumina-blog-media" 
