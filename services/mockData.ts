@@ -53,7 +53,7 @@ export const MOCK_USER: User = {
   //   // audioUrl: '/my-sermon.mp3' // 可选：如果有音频
   // },
   
-  {
+  // {
 //     id: '1',
 //     title: '唯独恩典：改革宗信仰的核心',
 //     excerpt: '在救恩的事上，人完全是被动的，完全是上帝恩典的工作。',
