@@ -2,3 +2,13 @@
 binding = "DB"
 database_name = "lumina-blog-db"
 database_id = "ceb06d47-9d5e-4c5c-a18c-595bc69d4981" 
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "lumina-blog-media"
+
+[vars]
+# 填写您刚才开启的公开访问网址，必须带 https://
+# 例如: https://pub-123456.r2.dev 或 https://media.yourdomain.com
+R2_PUBLIC_DOMAIN = "https://a2fa598b05e50f0385104298bf70b3d3.r2.cloudflarestorage.com/lumina-blog-media" 
+AUTH_SECRET = "966526" # 记得改成只有您知道的密码
