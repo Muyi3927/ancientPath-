@@ -9,7 +9,7 @@ export const MOCK_USER: User = {
   avatarUrl: 'https://ui-avatars.com/api/?name=Ancient+Path&background=0D8ABC&color=fff'
 };
 
-export const INITIAL_CATEGORIES: Category[] = [
+// export const INITIAL_CATEGORIES: Category[] = [
   // { id: 'c1', name: '教义', parentId: null },
   // { id: 'c2', name: '基督论', parentId: 'c1' },
   // { id: 'c3', name: '救恩论', parentId: 'c1' },
@@ -18,7 +18,7 @@ export const INITIAL_CATEGORIES: Category[] = [
   // { id: 'c6', name: '家庭', parentId: 'c4' },
   // { id: 'c7', name: '教会历史', parentId: null },
   // 添加新分类：复制上面一行，修改 id 和 name 即可
-];
+// ];
 
 /**
  * 🟢 如何添加新文章 (Git 模式):
@@ -32,7 +32,7 @@ export const INITIAL_CATEGORIES: Category[] = [
  * 3. 复制下方的对象结构，粘贴到 INITIAL_POSTS 数组的最上方。
  */
 
-export const INITIAL_POSTS: BlogPost[] = [
+// export const INITIAL_POSTS: BlogPost[] = [
   // === 在这里添加新文章 ===
   // {
   //   id: 'new-post-1', // 唯一的ID，不要重复
@@ -151,4 +151,4 @@ export const INITIAL_POSTS: BlogPost[] = [
 //     views: 780,
 //     isFeatured: true
 //   }
-];
+// ];
