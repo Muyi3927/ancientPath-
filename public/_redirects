@@ -1,0 +1,2 @@
+/api/*   https://media.ancientpath.dpdns.org/api/:splat    200
+/*       /index.html                            200
