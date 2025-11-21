@@ -18,7 +18,7 @@ async function handleResponse<T>(res: Response): Promise<T> {
     try {
       const err = await res.json();
       msg = err.error || msg;
-    } catch {}
+    } catch { }
     throw new Error(msg);
   }
   return res.json();
@@ -80,7 +80,29 @@ export const api = {
     console.log('上传成功，URL:', data.url); // 方便调试
     return data.url; // ← 这里一定是完整 https:// 开头的地址
   },
+  // 新增分类
+  async createCategory(name: string): Promise<Category> {
+    const res = await fetch(`${API_BASE_URL}/api/categories`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${AUTH_TOKEN}`,
+      },
+      body: JSON.stringify({ name }),
+    });
+    return handleResponse<Category>(res);
+  },
+
+  // 删除分类
+  async deleteCategory(id: string): Promise<void> {
+    await fetch(`${API_BASE_URL}/api/categories/${id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${AUTH_TOKEN}` },
+    });
+  },
 };
+
+
 
 /* ==================== .env 示例（项目根目录）====================
 # .env                → 本地开发读取

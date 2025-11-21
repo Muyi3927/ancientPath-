@@ -224,18 +224,49 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   //   navigate('/');
   // };
 
-  const handleAddCategory = () => {
-    if (newCategoryName.trim()) {
-      const parent = newCategoryParent === '' ? null : newCategoryParent;
-      onAddCategory(newCategoryName.trim(), parent);
+  // const handleAddCategory = () => {
+  //   if (newCategoryName.trim()) {
+  //     const parent = newCategoryParent === '' ? null : newCategoryParent;
+  //     onAddCategory(newCategoryName.trim(), parent);
+  //     setNewCategoryName('');
+  //   }
+  // };
+
+  // const handleDeleteCategoryClick = (e: React.MouseEvent, catId: string) => {
+  //   e.preventDefault();
+  //   e.stopPropagation();
+  //   onDeleteCategory(catId);
+  // };
+
+  const handleAddCategory = async () => {
+    if (!newCategoryName.trim()) return;
+
+    try {
+      const newCat = await api.createCategory(newCategoryName.trim());
+      // 如果你有本地 categories state，这里要更新
+      // 但最好在 App.tsx 里统一管理，重新 fetch
+      alert("分类添加成功！");
       setNewCategoryName('');
+      // 刷新分类列表（推荐在父组件重新 fetch）
+      window.location.reload(); // 简单粗暴，后面可以优化
+    } catch (err) {
+      alert("添加失败");
     }
   };
 
-  const handleDeleteCategoryClick = (e: React.MouseEvent, catId: string) => {
+  const handleDeleteCategoryClick = async (e: React.MouseEvent, catId: string) => {
     e.preventDefault();
     e.stopPropagation();
-    onDeleteCategory(catId);
+
+    if (!confirm('确定删除这个分类？')) return;
+
+    try {
+      await api.deleteCategory(catId);
+      alert("删除成功");
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "删除失败，可能分类下有文章");
+    }
   };
 
   return (

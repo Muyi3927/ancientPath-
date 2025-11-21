@@ -27,8 +27,8 @@ const checkAuth = (c: any) => {
   const authHeader = c.req.header('Authorization');
   // Default secret if env var is not set. 
   // IMPORTANT: Change this for production!
-  const secret = c.env.AUTH_SECRET || "my-secret-password"; 
-  
+  const secret = c.env.AUTH_SECRET || "my-secret-password";
+
   if (!authHeader || authHeader !== `Bearer ${secret}`) {
     return false;
   }
@@ -44,15 +44,15 @@ app.get('/api/posts', async (c) => {
     const { results } = await c.env.DB.prepare(
       `SELECT * FROM posts ORDER BY createdAt DESC`
     ).all();
-    
+
     // Transform data format to match frontend BlogPost interface
     const posts = results.map((p: any) => ({
       ...p,
       tags: p.tags ? JSON.parse(p.tags) : [],
       isFeatured: Boolean(p.isFeatured),
-      author: { username: p.authorName || 'Admin', role: 'ADMIN' } 
+      author: { username: p.authorName || 'Admin', role: 'ADMIN' }
     }));
-    
+
     return c.json(posts);
   } catch (e: any) {
     console.error("DB Error:", e);
@@ -65,16 +65,16 @@ app.get('/api/posts/:id', async (c) => {
   const id = c.req.param('id');
   try {
     const post = await c.env.DB.prepare('SELECT * FROM posts WHERE id = ?').bind(id).first();
-    
+
     if (!post) return c.json({ error: 'Not found' }, 404);
-    
+
     const formatted = {
       ...post,
       tags: post.tags ? JSON.parse(post.tags as string) : [],
       isFeatured: Boolean(post.isFeatured),
       author: { username: post.authorName || 'Admin', role: 'ADMIN' }
     };
-    
+
     return c.json(formatted);
   } catch (e: any) {
     return c.json({ error: e.message }, 500);
@@ -88,7 +88,7 @@ app.post('/api/posts', async (c) => {
   try {
     const body = await c.req.json();
     const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author } = body;
-    
+
     const now = Date.now();
     const tagString = JSON.stringify(tags || []);
 
@@ -96,12 +96,12 @@ app.post('/api/posts', async (c) => {
     const existing = await c.env.DB.prepare('SELECT id FROM posts WHERE id = ?').bind(id).first();
 
     if (existing) {
-        await c.env.DB.prepare(`
+      await c.env.DB.prepare(`
             UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, audioUrl=?
             WHERE id=?
         `).bind(title, excerpt, content, coverImage, now, categoryId, tagString, isFeatured ? 1 : 0, audioUrl, id).run();
     } else {
-        await c.env.DB.prepare(`
+      await c.env.DB.prepare(`
             INSERT INTO posts (id, title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, audioUrl, authorName)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `).bind(id, title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, audioUrl, author?.username || 'Admin').run();
@@ -150,8 +150,8 @@ app.put('/api/upload', async (c) => {
     // 生成公开 URL（自动带文件夹）
     let publicUrl = '';
     if (c.env.R2_PUBLIC_DOMAIN) {
-      const base = c.env.R2_PUBLIC_DOMAIN.endsWith('/') 
-        ? c.env.R2_PUBLIC_DOMAIN.slice(0, -1) 
+      const base = c.env.R2_PUBLIC_DOMAIN.endsWith('/')
+        ? c.env.R2_PUBLIC_DOMAIN.slice(0, -1)
         : c.env.R2_PUBLIC_DOMAIN;
       publicUrl = `${base}/${key}`;  // 自动变成 /images/xxx.png 或 /audios/xxx.mp3
     } else {
@@ -176,3 +176,49 @@ app.get('/api/categories', async (c) => {
 });
 
 export default app;
+
+
+// 6. Create New Category (Protected)
+app.post('/api/categories', async (c) => {
+  if (!checkAuth(c)) return c.json({ error: 'Unauthorized' }, 401);
+
+  try {
+    const body = await c.req.json();
+    const { name } = body;
+
+    if (!name?.trim()) return c.json({ error: '分类名称不能为空' }, 400);
+
+    const id = Date.now().toString(); // 简单用时间戳，也可以用 uuid
+    const trimmedName = name.trim();
+
+    await c.env.DB.prepare(
+      `INSERT INTO categories (id, name) VALUES (?, ?)`
+    ).bind(id, trimmedName).run();
+
+    return c.json({ id, name: trimmedName });
+  } catch (e: any) {
+    console.error("Create Category Error:", e);
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// 7. Delete Category (Protected)
+app.delete('/api/categories/:id', async (c) => {
+  if (!checkAuth(c)) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+
+  try {
+    // 可选：检查是否有文章在使用这个分类
+    const used = await c.env.DB.prepare('SELECT 1 FROM posts WHERE categoryId = ? LIMIT 1').bind(id).first();
+    if (used) {
+      return c.json({ error: '该分类下有文章，无法删除' }, 400);
+    }
+
+    await c.env.DB.prepare('DELETE FROM categories WHERE id = ?').bind(id).run();
+
+    return c.json({ success: true });
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
