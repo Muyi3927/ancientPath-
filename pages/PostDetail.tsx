@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { BlogPost, Category } from '../types';
 import { AuthContext } from '../App';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { ArrowLeft, Calendar, User, Share2, Tag, Type, Minus, Plus, Volume2, Edit, Gauge, Trash2, List, X } from 'lucide-react';
+import { ArrowLeft, Calendar, User, Share2, Tag, Type, Minus, Plus, Volume2, Edit, Gauge, Trash2, List, X, FileDown } from 'lucide-react';
 
 interface PostDetailProps {
   posts: BlogPost[];
@@ -91,7 +91,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   
   return (
     <div className="max-w-4xl mx-auto">
-      <div className="flex flex-wrap gap-4 justify-between items-center mb-6">
+      <div className="flex flex-wrap gap-4 justify-between items-center mb-6 print:hidden">
           <div className="flex items-center gap-4">
             <Link to="/" className="flex items-center text-slate-500 hover:text-primary-600 transition-colors">
                 <ArrowLeft className="w-4 h-4 mr-2" /> 返回列表
@@ -110,6 +110,20 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
 
           {/* Accessibility & TOC Controls */}
           <div className="flex items-center gap-2 ml-auto">
+            <button 
+                onClick={() => {
+                    const originalTitle = document.title;
+                    document.title = `访问古道_${post.title}`;
+                    window.print();
+                    document.title = originalTitle;
+                }}
+                className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm font-medium shadow-sm"
+                title="导出为 PDF"
+            >
+                <FileDown className="w-4 h-4" />
+                <span>导出 PDF</span>
+            </button>
+
           <div className="flex items-center bg-white dark:bg-slate-800 rounded-full p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
              <div className="px-3 flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
                 <Type className="w-3 h-3" /> 字体
@@ -165,7 +179,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                    </Link>
                 ))}
              </div>
-             <div className="flex gap-4 flex-shrink-0">
+             <div className="flex gap-4 flex-shrink-0 print:hidden">
                <button onClick={handleShare} className="flex items-center gap-1 text-slate-500 hover:text-primary-600" title="分享">
                   <Share2 className="w-5 h-5" /> 分享
                </button>
@@ -174,7 +188,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
 
           {/* Audio Player */}
           {post.audioUrl && (
-              <div className="mb-10 bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700">
+              <div className="mb-10 bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 print:hidden">
                   <div className="flex items-center justify-between mb-3 text-primary-600 font-bold">
                       <div className="flex items-center gap-2">
                         <Volume2 className="w-5 h-5" /> 

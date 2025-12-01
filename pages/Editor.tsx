@@ -381,7 +381,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                                 {suggestedTags.length > 0 && (
                                     <div className="flex flex-wrap gap-2 px-1">
                                         <span className="text-[10px] text-slate-400 uppercase font-bold mt-1">推荐标签:</span>
-                                        {suggestedTags.slice(0, 8).map(tag => (
+                                        {suggestedTags.map(tag => (
                                             <button
                                                 key={tag}
                                                 onClick={() => handleAddTag(tag)}

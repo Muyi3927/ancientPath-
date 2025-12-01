@@ -28,7 +28,19 @@ const App: React.FC = () => {
   const [isDark, setIsDark] = useState(false);
   
   // 认证状态
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<User | null>(() => {
+    const savedUser = localStorage.getItem('user');
+    return savedUser ? JSON.parse(savedUser) : null;
+  });
+
+  // 监听 user 变化并同步到 localStorage
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem('user', JSON.stringify(user));
+    } else {
+      localStorage.removeItem('user');
+    }
+  }, [user]);
 
   // 数据状态 - 完全依赖后端，初始为空
   const [posts, setPosts] = useState<BlogPost[]>([]);

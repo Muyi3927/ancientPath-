@@ -287,7 +287,6 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                           <div className="flex flex-wrap gap-3 justify-center items-baseline">
                              {Object.entries(tagCounts)
                                 .sort(([,a], [,b]) => b - a) // 按数量排序
-                                .slice(0, 20) // 显示前 20 个
                                 .map(([tag, count]) => (
                                  <Link 
                                     key={tag} 
@@ -360,7 +359,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                              </p>
                          </div>
                          <div className="flex items-center justify-between mt-auto">
-                            <div className="flex gap-2 flex-wrap overflow-hidden h-5 md:h-6">
+                            <div className="flex gap-2 flex-wrap">
                               {post.tags.slice(0, 3).map((tag) => (
                                 <Link 
                                   key={tag} 
