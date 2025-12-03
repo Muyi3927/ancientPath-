@@ -1,8 +1,10 @@
 // services/api.ts
 import { BlogPost, Category } from '../types';
 
-// 使用您为 Worker 绑定的自定义域名
-const API_BASE_URL = 'https://api.ancientpath.dpdns.org';
+// Automatically switch to local backend in development
+const API_BASE_URL = import.meta.env.DEV 
+  ? 'http://localhost:8787' 
+  : 'https://api.ancientpath.dpdns.org';
 
 /**
  * 统一处理 API 请求的函数
@@ -10,7 +12,7 @@ const API_BASE_URL = 'https://api.ancientpath.dpdns.org';
  * @param options fetch 函数的配置选项
  * @returns Promise<T>
  */
-async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   
   // 从 localStorage 获取 Token (这里我们直接使用密码作为 Token)

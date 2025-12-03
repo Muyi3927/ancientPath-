@@ -2,9 +2,10 @@ import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
-import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
+import { generateSummary } from '../services/aiService';
 
 interface EditorProps {
   onSave: (post: BlogPost) => void;
@@ -37,6 +38,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
   // Category Creation/Management State
   const [isManagingCategory, setIsManagingCategory] = useState(false);
@@ -203,6 +205,19 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
     setCurrentTags(currentTags.filter(t => t !== tagToRemove));
   };
 
+  const handleGenerateSummary = async () => {
+    if (!content) return alert("请先输入文章内容");
+    setIsGeneratingSummary(true);
+    try {
+      const summary = await generateSummary(content);
+      setExcerpt(summary);
+    } catch (e) {
+      alert("生成摘要失败");
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  };
+
   const handleSave = async () => {
     if (!title || !content || categoryId === undefined) return alert("标题、内容和分类不能为空");
     
@@ -317,12 +332,22 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                 {!isMetaCollapsed && (
                     <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
                         {/* Excerpt Field */}
-                        <textarea 
-                            placeholder="文章简介 (将会显示在卡片上)"
-                            value={excerpt}
-                            onChange={e => setExcerpt(e.target.value)}
-                            className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none h-20"
-                        />
+                        <div className="relative">
+                            <textarea 
+                                placeholder="文章简介 (将会显示在卡片上)"
+                                value={excerpt}
+                                onChange={e => setExcerpt(e.target.value)}
+                                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-lg p-3 text-sm focus:ring-2 focus:ring-primary-500 outline-none resize-none h-20 pr-10"
+                            />
+                            <button
+                                onClick={handleGenerateSummary}
+                                disabled={isGeneratingSummary || !content}
+                                className="absolute right-2 bottom-2 p-1.5 bg-purple-100 text-purple-600 rounded-md hover:bg-purple-200 disabled:opacity-50 transition-colors"
+                                title="AI 生成摘要"
+                            >
+                                {isGeneratingSummary ? <Loader2 className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4" />}
+                            </button>
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             {/* Cover Image Input */}

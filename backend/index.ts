@@ -15,6 +15,10 @@ type Bindings = {
   // The public domain for your R2 bucket (e.g. https://media.yourdomain.com)
   // If not set, we will try to construct a default R2.dev URL, but Custom Domain is recommended.
   R2_PUBLIC_DOMAIN?: string;
+  // Custom/Local LLM Configuration (OpenAI Compatible)
+  CUSTOM_LLM_API_KEY?: string;
+  CUSTOM_LLM_API_BASE?: string; // e.g. https://your-tunnel-url.com/v1
+  CUSTOM_LLM_MODEL?: string;
 };
 
 const app = new Hono<{ Bindings: Bindings }>();
@@ -297,6 +301,74 @@ app.delete('/api/posts/:id', async (c: any) => {
   } catch (e: any) {
     console.error('Delete post error:', e);
     return c.json({ error: e.message || String(e) }, 500);
+  }
+});
+
+// AI Summary Generation (Using Custom/Local LLM)
+app.post('/api/generate-summary', async (c) => {
+  if (!checkAuth(c)) return c.json({ error: 'Unauthorized' }, 401);
+
+  try {
+    const { content } = await c.req.json();
+    
+    // 1. Get Config
+    const apiKey = c.env.CUSTOM_LLM_API_KEY ? c.env.CUSTOM_LLM_API_KEY.trim() : '';
+    // API Base URL (Must be public if deployed on Cloudflare, e.g. ngrok)
+    // Format: https://your-domain.com/v1
+    const apiBase = c.env.CUSTOM_LLM_API_BASE ? c.env.CUSTOM_LLM_API_BASE.trim() : '';
+    const model = c.env.CUSTOM_LLM_MODEL || 'gpt-oss:20b';
+
+    if (!apiKey || !apiBase) {
+      return c.json({ error: 'Configuration missing: Please set CUSTOM_LLM_API_KEY and CUSTOM_LLM_API_BASE' }, 500);
+    }
+
+    // 2. Call API (OpenAI Compatible)
+    // Ensure apiBase doesn't end with slash
+    const baseUrl = apiBase.replace(/\/+$/, '');
+    const response = await fetch(`${baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+        },
+        body: JSON.stringify({
+            model: model,
+            messages: [
+                { role: "system", content: "你将为一篇改革宗讲道文本撰写摘要，发布于博客，用于吸引读者点击阅读全文。请遵守以下要求：\
+                                          • 内容长度约为80字\
+                                          • 使用中文表达\
+                                          • 采用提问式或引人思考的方式，提高吸引力\
+                                          • 将“讲道”作为出处称呼，不提及作者、讲员姓名或任何引用来源\
+                                          • 不出现经文引用、章节编号、脚注或链接\
+                                          • 不过度剧透主要论证与结论，要激发读者好奇心\
+                                          • 保持逻辑连贯、严肃庄重（符合改革宗风格），但语气具引导性和呼召性\
+                                          • 避免夸张口号和空洞情绪化表达\
+                                          输出格式要求：\
+                                          只返回最终摘要内容，不添加任何备注、前缀、标题、解释或提示语。" },
+                { role: "user", content: content.substring(0, 4000) }
+            ],
+            stream: false
+        })
+    });
+
+    if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Custom LLM Error:', errorText);
+        throw new Error(`Custom LLM Error: ${response.status} - ${errorText}`);
+    }
+
+    const data: any = await response.json();
+    const summary = data.choices?.[0]?.message?.content;
+
+    if (!summary) {
+        throw new Error('Failed to generate summary from AI response');
+    }
+
+    return c.json({ summary });
+
+  } catch (e: any) {
+    console.error("AI Error:", e);
+    return c.json({ error: `AI Generation Failed: ${e.message}` }, 500);
   }
 });
 
