@@ -6,6 +6,26 @@ const API_BASE_URL = import.meta.env.DEV
   ? 'http://localhost:8787' 
   : 'https://api.ancientpath.dpdns.org';
 
+export const loginUser = async (password: string): Promise<{ success: boolean; token?: string; error?: string }> => {
+  const url = `${API_BASE_URL}/api/login`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password }),
+    });
+    
+    if (!response.ok) {
+       return { success: false, error: 'Login failed' };
+    }
+    
+    const data = await response.json();
+    return data;
+  } catch (e) {
+    return { success: false, error: String(e) };
+  }
+};
+
 /**
  * 统一处理 API 请求的函数
  * @param endpoint API 的路径 (例如 /api/posts)

@@ -26,3 +26,8 @@ dist-ssr
 lumina-blog-media/*
 lumina-blog-media-optimized/*
 mobile/assets/*
+backend/wrangler.toml
+backend/.dev.vars
+.env
+.env.*
+!.env.example

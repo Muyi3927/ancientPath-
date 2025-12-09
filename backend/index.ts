@@ -29,9 +29,12 @@ app.use('/*', cors());
 // --- Auth Helper ---
 const checkAuth = (c: any) => {
   const authHeader = c.req.header('Authorization');
-  // Default secret if env var is not set. 
-  // IMPORTANT: Change this for production!
-  const secret = c.env.AUTH_SECRET || "fwgd3927"; 
+  const secret = c.env.AUTH_SECRET;
+  
+  if (!secret) {
+    console.error("AUTH_SECRET is not configured");
+    return false;
+  }
   
   if (!authHeader || authHeader !== `Bearer ${secret}`) {
     return false;
@@ -40,6 +43,26 @@ const checkAuth = (c: any) => {
 };
 
 // --- 路由 ---
+
+// Login Endpoint
+app.post('/api/login', async (c) => {
+  try {
+    const { password } = await c.req.json();
+    const secret = c.env.AUTH_SECRET;
+    
+    if (!secret) {
+      return c.json({ error: 'Server configuration error' }, 500);
+    }
+    
+    if (password === secret) {
+      return c.json({ success: true, token: secret });
+    } else {
+      return c.json({ error: 'Invalid credentials' }, 401);
+    }
+  } catch (e) {
+    return c.json({ error: 'Invalid request' }, 400);
+  }
+});
 
 // 0. 代理 R2 图片/音频 (解决 404 问题)
 app.get('/api/media/:folder/:filename', async (c) => {

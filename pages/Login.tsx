@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { UserRole } from '../types';
 import { Lock, User, ArrowRight } from 'lucide-react';
+import { loginUser } from '../services/api';
 
 export const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -10,17 +11,27 @@ export const Login: React.FC = () => {
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Hardcoded credentials as requested
-    if (username === 'admin' && password === 'fwgd3927') {
-       // 存储 Token (密码) 到 localStorage，供 api.ts 使用
-       localStorage.setItem('authToken', password);
-       login('Admin', UserRole.ADMIN);
-       navigate('/');
-    } else {
-      alert('认证失败。用户名或密码错误。');
+    if (username !== 'admin') {
+        alert('用户名错误');
+        return;
+    }
+
+    try {
+       const result = await loginUser(password);
+       if (result.success && result.token) {
+          // 存储 Token 到 localStorage，供 api.ts 使用
+          localStorage.setItem('authToken', result.token);
+          login('Admin', UserRole.ADMIN);
+          navigate('/');
+       } else {
+          alert('认证失败。密码错误。');
+       }
+    } catch (error) {
+       console.error(error);
+       alert('登录过程中发生错误');
     }
   };
 
