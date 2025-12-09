@@ -74,10 +74,33 @@ app.get('/api/media/:folder/:filename', async (c) => {
 // 1. 获取所有文章
 app.get('/api/posts', async (c) => {
   try {
+    const categoryId = c.req.query('categoryId');
+    const search = c.req.query('search');
+    let query = `SELECT * FROM posts`;
+    const params: any[] = [];
+    const conditions: string[] = [];
+
+    // Ensure categoryId is valid and not "undefined" string
+    if (categoryId && categoryId !== 'undefined' && categoryId !== 'null') {
+      conditions.push(`categoryId = ?`);
+      params.push(categoryId);
+    }
+
+    if (search) {
+      conditions.push(`(title LIKE ? OR content LIKE ?)`);
+      params.push(`%${search}%`);
+      params.push(`%${search}%`);
+    }
+
+    if (conditions.length > 0) {
+      query += ` WHERE ` + conditions.join(' AND ');
+    }
+
+    query += ` ORDER BY createdAt DESC`;
+
     // D1: 查询 posts 表，按创建时间倒序排序
-    const { results } = await c.env.DB.prepare(
-      `SELECT * FROM posts ORDER BY createdAt DESC`
-    ).all();
+    const stmt = c.env.DB.prepare(query);
+    const { results } = await (params.length > 0 ? stmt.bind(...params) : stmt).all();
     
     // 格式化从数据库取出的数据，以匹配前端 BlogPost 接口
     const posts = results.map((p: any) => ({

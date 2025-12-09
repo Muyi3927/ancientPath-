@@ -60,9 +60,6 @@ export const About: React.FC = () => {
 
       {/* Header */}
       <div className="text-center space-y-8 py-12">
-        <div className="inline-flex p-4 rounded-full bg-slate-100 dark:bg-slate-800 mb-4 ring-8 ring-slate-50 dark:ring-slate-900">
-            <BookOpen className="w-12 h-12 text-slate-700 dark:text-slate-200" />
-        </div>
         <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white tracking-tight">关于访问古道</h1>
         
         <div className="max-w-3xl mx-auto">

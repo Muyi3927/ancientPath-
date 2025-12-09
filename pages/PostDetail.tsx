@@ -234,7 +234,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       {headings.length > 0 && (
         <button
           onClick={() => setShowTOC(true)}
-          className="fixed bottom-8 right-8 z-40 p-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 hover:text-primary-600 transition-all hover:scale-110"
+          className="fixed bottom-24 right-4 md:bottom-8 md:right-8 z-40 p-3 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full shadow-lg border border-slate-200 dark:border-slate-700 hover:text-primary-600 transition-all hover:scale-110"
           title="目录"
         >
           <List className="w-6 h-6" />
@@ -243,9 +243,9 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
 
       {/* TOC Overlay */}
       {showTOC && (
-        <div className="fixed inset-0 z-50 flex justify-end bg-black/20 backdrop-blur-sm" onClick={() => setShowTOC(false)}>
+        <div className="fixed inset-0 z-50 flex flex-col justify-end md:flex-row md:justify-end bg-black/20 backdrop-blur-sm" onClick={() => setShowTOC(false)}>
           <div 
-            className="w-80 bg-white dark:bg-slate-900 h-full shadow-2xl p-6 overflow-y-auto border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-right"
+            className="w-full md:w-80 h-[60vh] md:h-full bg-white dark:bg-slate-900 shadow-2xl p-6 overflow-y-auto rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom md:slide-in-from-right duration-300"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-6">

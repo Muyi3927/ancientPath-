@@ -6,6 +6,9 @@ import { PostDetail } from './pages/PostDetail';
 import { Editor } from './pages/Editor';
 import { Login } from './pages/Login';
 import { About } from './pages/About';
+import { Bible } from './pages/Bible';
+import { Categories } from './pages/Categories';
+import { DownloadApp } from './pages/DownloadApp';
 import { ThemeContextType, AuthContextType, User, UserRole, BlogPost, Category } from './types';
 import { getPosts, getCategories, createCategory, deleteCategory as apiDeleteCategory, deletePost } from './services/api';
 
@@ -23,9 +26,20 @@ export const AuthContext = createContext<AuthContextType>({
   isAdmin: false
 });
 
+export const LayoutContext = createContext<{
+  isMenuVisible: boolean;
+  setMenuVisible: (visible: boolean) => void;
+}>({
+  isMenuVisible: true,
+  setMenuVisible: () => {},
+});
+
 const App: React.FC = () => {
   // 主题状态
   const [isDark, setIsDark] = useState(false);
+  
+  // 菜单可见性状态
+  const [isMenuVisible, setMenuVisible] = useState(true);
   
   // 认证状态
   const [user, setUser] = useState<User | null>(() => {
@@ -196,11 +210,15 @@ const App: React.FC = () => {
         isAuthenticated: !!user,
         isAdmin: user?.role === UserRole.ADMIN
       }}>
-        <HashRouter>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Home posts={posts} categories={categories} />} />
+        <LayoutContext.Provider value={{ isMenuVisible, setMenuVisible }}>
+          <HashRouter>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Home posts={posts} categories={categories} />} />
               <Route path="/about" element={<About />} />
+              <Route path="/bible" element={<Bible />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/app" element={<DownloadApp />} />
               <Route path="/post/:id" element={<PostDetail posts={posts} updatePost={updatePostInState} onDeletePost={handleDeletePost} categories={categories} />} />
               <Route path="/login" element={<Login />} />
               <Route 
@@ -233,6 +251,7 @@ const App: React.FC = () => {
             </Routes>
           </Layout>
         </HashRouter>
+        </LayoutContext.Provider>
       </AuthContext.Provider>
     </ThemeContext.Provider>
   );

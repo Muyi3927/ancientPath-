@@ -1,11 +1,12 @@
 import React, { useContext, useState, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { Sun, Moon, PenTool, LogOut, Search, Menu, X, BookOpen } from 'lucide-react';
-import { ThemeContext, AuthContext } from '../App';
+import { Sun, Moon, PenTool, LogOut, Search, Menu, X, BookOpen, Home, LayoutGrid, User, Download } from 'lucide-react';
+import { ThemeContext, AuthContext, LayoutContext } from '../App';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
   const { user, logout, isAuthenticated, isAdmin } = useContext(AuthContext);
+  const { isMenuVisible } = useContext(LayoutContext);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
@@ -43,20 +44,20 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const isActive = (path: string) => location.pathname === path;
+  const isFullWidthPage = ['/bible', '/categories'].includes(location.pathname);
+  const isBiblePage = location.pathname === '/bible';
 
   return (
-    <div className="min-h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 font-sans">
+    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 font-sans overflow-hidden">
       {/* Navbar */}
-      <nav className="sticky top-0 z-50 w-full backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 print:hidden">
+      <nav className={`flex-none z-50 w-full backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 print:hidden transition-all duration-500 ease-in-out ${isBiblePage ? 'fixed top-0 left-0 right-0' : 'sticky top-0'} ${isMenuVisible ? 'translate-y-0' : `-translate-y-full ${!isBiblePage ? '-mb-16' : ''}`}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             
             {/* Logo */}
             <div className="flex-shrink-0">
               <Link to="/" className="flex items-center gap-3">
-                <div className="w-9 h-9 bg-slate-900 dark:bg-slate-100 rounded-lg flex items-center justify-center text-white dark:text-slate-900 shadow-lg">
-                  <BookOpen className="w-5 h-5" />
-                </div>
+                <img src="/logo.svg" alt="Logo" className="w-9 h-9 rounded-lg shadow-lg" />
                 <div className="flex flex-col -space-y-1">
                    <span className="font-serif font-bold text-lg tracking-tight text-slate-900 dark:text-slate-100">访问古道</span>
                    <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest">Ask for the Ancient Paths</span>
@@ -68,6 +69,15 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             <div className="hidden md:flex items-center space-x-8">
               <Link to="/" className={`${isActive('/') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 首页
+              </Link>
+              <Link to="/bible" className={`${isActive('/bible') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+                圣经
+              </Link>
+              <Link to="/categories" className={`${isActive('/categories') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+                分类
+              </Link>
+              <Link to="/app" className={`${isActive('/app') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+                下载App
               </Link>
               <Link to="/about" className={`${isActive('/about') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 关于我们
@@ -111,70 +121,62 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               {/* Removed Public Login Button */}
             </div>
 
-            {/* Mobile menu button */}
+            {/* Mobile menu button - Removed in favor of Bottom Nav */}
             <div className="md:hidden flex items-center gap-4">
                <button onClick={toggleTheme} className="p-2">
                 {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
-              </button>
-              <button onClick={() => setIsMenuOpen(!isMenuOpen)} className="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-800">
-                {isMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
               </button>
             </div>
           </div>
         </div>
 
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-4 space-y-4">
-             <form onSubmit={handleSearch} className="relative w-full">
-                <input 
-                  type="text" 
-                  placeholder="搜索..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm"
-                />
-                <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
-              </form>
-              <div className="flex flex-col gap-2 divide-y divide-slate-100 dark:divide-slate-800">
-                <Link to="/" onClick={() => setIsMenuOpen(false)} className="py-3 text-lg font-medium">首页</Link>
-                <Link to="/about" onClick={() => setIsMenuOpen(false)} className="py-3 text-lg font-medium">关于我们</Link>
-                {isAuthenticated && isAdmin && (
-                   <Link to="/editor" onClick={() => setIsMenuOpen(false)} className="py-3 text-lg font-medium text-primary-600">撰写文章</Link>
-                )}
-                {isAuthenticated && (
-                  <button onClick={() => { logout(); setIsMenuOpen(false); }} className="py-3 text-lg font-medium text-left text-red-500">退出登录</button>
-                )}
-              </div>
-          </div>
-        )}
+        {/* Mobile Menu - Removed */}
       </nav>
 
-      {/* Content */}
-      <main className="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {children}
-      </main>
+      {/* Content Wrapper */}
+      <div className="flex-1 overflow-y-auto overflow-x-hidden w-full relative">
+        <main className={isFullWidthPage ? 'h-full' : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 pb-20 md:pb-0'}>
+          {children}
+        </main>
 
-      {/* Footer */}
-      <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 mt-12 print:hidden">
-        <div className="max-w-7xl mx-auto px-4 text-center">
-          <div className="flex justify-center items-center gap-2 mb-4">
-             <BookOpen className="w-6 h-6 text-slate-400" />
-             <span className="font-serif font-bold text-xl text-slate-700 dark:text-slate-200">访问古道</span>
+        {/* Footer */}
+        {!isFullWidthPage && (
+        <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 print:hidden pb-24 md:pb-6">
+          <div className="max-w-7xl mx-auto px-4 text-center">
+            <div 
+              className="text-xs text-slate-400 cursor-text select-none"
+              onClick={handleHiddenLoginClick}
+            >
+              &copy; {new Date().getFullYear()} 访问古道 (Ancient Paths). 唯独荣耀归于神.
+            </div>
           </div>
-          <p className="text-slate-500 dark:text-slate-400 text-sm max-w-md mx-auto leading-relaxed">
-            耶和华如此说：你们当站在路上察看，访问古道，哪是善道，便行在其中，这样你们心里必得安息。
-            <br/><span className="italic">- 耶利米书 6:16</span>
-          </p>
-          {/* Hidden Login Trigger */}
-          <div 
-            className="mt-8 text-xs text-slate-400 cursor-text select-none"
-            onClick={handleHiddenLoginClick}
-          >
-            &copy; {new Date().getFullYear()} 访问古道 (Ancient Paths). 唯独荣耀归于神.
-          </div>
-        </div>
-      </footer>
+        </footer>
+        )}
+      </div>
+
+      {/* Bottom Nav for Mobile */}
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 flex justify-around items-center h-16 z-50 pb-safe transition-transform duration-500 ease-in-out ${isMenuVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+        <Link to="/" className={`flex flex-col items-center p-2 ${isActive('/') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <Home className="w-6 h-6" />
+          <span className="text-[10px] mt-1">首页</span>
+        </Link>
+        <Link to="/bible" className={`flex flex-col items-center p-2 ${isActive('/bible') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <BookOpen className="w-6 h-6" />
+          <span className="text-[10px] mt-1">圣经</span>
+        </Link>
+        <Link to="/categories" className={`flex flex-col items-center p-2 ${isActive('/categories') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <LayoutGrid className="w-6 h-6" />
+          <span className="text-[10px] mt-1">分类</span>
+        </Link>
+        <Link to="/app" className={`flex flex-col items-center p-2 ${isActive('/app') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <Download className="w-6 h-6" />
+          <span className="text-[10px] mt-1">下载</span>
+        </Link>
+        <Link to="/about" className={`flex flex-col items-center p-2 ${isActive('/about') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+          <User className="w-6 h-6" />
+          <span className="text-[10px] mt-1">关于</span>
+        </Link>
+      </div>
     </div>
   );
 };
