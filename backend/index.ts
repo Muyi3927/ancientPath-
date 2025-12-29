@@ -350,6 +350,74 @@ app.delete('/api/posts/:id', async (c: any) => {
   }
 });
 
+// === Bible API ===
+
+// 9. 获取书卷列表
+app.get('/api/bible/books', async (c) => {
+  try {
+    const version = c.req.query('version') || 'cuv'; // cuv or asv
+    // 目前我们只把 BibleID 表导入了，BibleID 表其实是通用的书卷名，
+    // 如果要区分中英文书名 (CUV vs ASV)，可能需要两套 BibleID 数据或者扩展字段。
+    // 这里我们先返回 BibleID 的数据。如果需要英文名，目前 BibleID 有 ShortName/FullName (中文)。
+    // TODO: 如果需要英文书名，需要导入 ASV 的 BibleID 或者在 BibleID 表加英文列。
+    
+    // 假设 BibleID 表是共享的，或者目前只导入了中文书卷名。
+    const { results } = await c.env.DB.prepare('SELECT * FROM BibleID ORDER BY SN ASC').all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// 10. 获取经文
+app.get('/api/bible/verses', async (c) => {
+  try {
+    const book = c.req.query('book'); // VolumeSN (1-66)
+    const chapter = c.req.query('chapter'); // ChapterSN
+    const version = c.req.query('version') || 'cuv';
+
+    if (!book || !chapter) {
+      return c.json({ error: 'Missing book or chapter' }, 400);
+    }
+
+    // 查询指定版本、书卷、章节的经文
+    const query = `
+      SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection, SoundBegin, SoundEnd 
+      FROM Bible 
+      WHERE VolumeSN = ? AND ChapterSN = ? AND Version = ? 
+      ORDER BY VerseSN ASC
+    `;
+    const { results } = await c.env.DB.prepare(query).bind(book, chapter, version).all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// 11. 搜索经文
+app.get('/api/bible/search', async (c) => {
+  try {
+    const q = c.req.query('q');
+    const version = c.req.query('version') || 'cuv';
+    
+    if (!q || q.length < 2) { // 限制搜索词长度
+       return c.json([]); 
+    }
+
+    const query = `
+      SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection 
+      FROM Bible 
+      WHERE Lection LIKE ? AND Version = ? 
+      ORDER BY VolumeSN ASC, ChapterSN ASC, VerseSN ASC 
+      LIMIT 100
+    `;
+    const { results } = await c.env.DB.prepare(query).bind(`%${q}%`, version).all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
 // AI Summary Generation (Using Custom/Local LLM)
 app.post('/api/generate-summary', async (c) => {
   if (!checkAuth(c)) return c.json({ error: 'Unauthorized' }, 401);

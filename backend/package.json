@@ -3,9 +3,8 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "deploy": "wrangler deploy",
-    "dev": "wrangler dev",
-    "start": "wrangler dev"
+    "dev": "wrangler dev --remote",
+    "deploy": "wrangler deploy"
   },
   "dependencies": {
     "hono": "^4.1.0"

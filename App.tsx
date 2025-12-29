@@ -1,5 +1,5 @@
 import React, { useState, useEffect, createContext } from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Home } from './pages/Home';
 import { PostDetail } from './pages/PostDetail';
@@ -211,7 +211,7 @@ const App: React.FC = () => {
         isAdmin: user?.role === UserRole.ADMIN
       }}>
         <LayoutContext.Provider value={{ isMenuVisible, setMenuVisible }}>
-          <HashRouter>
+          <BrowserRouter>
             <Layout>
               <Routes>
                 <Route path="/" element={<Home posts={posts} categories={categories} />} />
@@ -247,12 +247,11 @@ const App: React.FC = () => {
                   />
                 } 
               />
-              <Route path="*" element={<Navigate to="/" />} />
-            </Routes>
-          </Layout>
-        </HashRouter>
-        </LayoutContext.Provider>
-      </AuthContext.Provider>
+                            <Route path="*" element={<Navigate to="/" />} />
+                          </Routes>
+                        </Layout>
+                        </BrowserRouter>
+                      </LayoutContext.Provider>      </AuthContext.Provider>
     </ThemeContext.Provider>
   );
 };
