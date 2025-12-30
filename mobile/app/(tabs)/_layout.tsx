@@ -38,6 +38,13 @@ export default function TabLayout() {
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="folder.fill" color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="hymns"
+        options={{
+          title: '诗歌',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="music.note" color={color} />,
+        }}
+      />
     </Tabs>
   );
 }

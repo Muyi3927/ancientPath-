@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView, SafeAreaView, useColorScheme, Platform, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { Link, useRouter } from 'expo-router';
@@ -36,7 +36,11 @@ export default function CategoriesScreen() {
 
   useEffect(() => {
     const processCategories = (data: Category[]) => {
-        return data.sort((a, b) => {
+        // Exclude Hymns/Poetry categories
+        const excludedNames = ['韵律诗篇', '圣诗'];
+        const filteredData = data.filter(c => !excludedNames.includes(c.name));
+
+        return filteredData.sort((a, b) => {
             const indexA = BIBLE_ORDER.indexOf(a.name);
             const indexB = BIBLE_ORDER.indexOf(b.name);
 
@@ -117,21 +121,24 @@ export default function CategoriesScreen() {
   const activeCategoryId = selectedL2Id || selectedL1Id;
 
   // Recursive function to get all descendant category IDs
-  const getDescendantIds = (rootId: number): number[] => {
-      const children = categories.filter(c => c.parentId === rootId);
-      let ids = children.map(c => c.id);
-      children.forEach(child => {
-          ids = [...ids, ...getDescendantIds(child.id)];
-      });
-      return ids;
-  };
+  const getDescendantIds = useCallback((rootId: number, allCats: Category[]): number[] => {
+      const fetchIds = (id: number): number[] => {
+          const children = allCats.filter(c => c.parentId === id);
+          let result = children.map(c => c.id);
+          children.forEach(child => {
+              result = [...result, ...fetchIds(child.id)];
+          });
+          return result;
+      };
+      return fetchIds(rootId);
+  }, []);
 
   const filteredPosts = useMemo(() => {
     if (!activeCategoryId) return [];
     
-    const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId)]);
+    const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId, categories)]);
     return allPosts.filter(p => targetIds.has(p.categoryId));
-  }, [allPosts, activeCategoryId, categories]);
+  }, [allPosts, activeCategoryId, categories, getDescendantIds]);
 
   const handleL1Select = (id: number) => {
     setSelectedL1Id(id);

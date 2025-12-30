@@ -4,11 +4,13 @@ import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColo
 import { Image } from 'expo-image';
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from 'react-native-render-html';
 import { marked } from 'marked';
-import { getPostById } from '../../services/api';
-import { BlogPost } from '../../types';
+import { getPostById, getCategories } from '../../services/api';
+import { BlogPost, Category } from '../../types';
 import AudioPlayer from '../../components/AudioPlayer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { markPostAsRead, saveReadingProgress, getReadingProgress } from '../../services/readingHistory';
+
+const HYMN_FIXED_COVER = "https://media.ancientpath.dpdns.org/images/Hymns/hymncover.webp";
 
 const customHTMLElementModels = {
   mark: HTMLElementModel.fromCustomModel({
@@ -20,6 +22,7 @@ const customHTMLElementModels = {
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
   const [post, setPost] = useState<BlogPost | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme();
@@ -33,6 +36,14 @@ export default function PostDetailScreen() {
   const headerPositionsRef = useRef<{[index: number]: number}>({});
   const htmlContainerYRef = useRef(0);
   const [initialScrollY, setInitialScrollY] = useState(0);
+
+  const isHymn = useMemo(() => {
+    if (!post || categories.length === 0) return false;
+    const category = categories.find(c => c.id === post.categoryId);
+    if (!category) return false;
+    const parent = categories.find(c => c.id === category.parentId);
+    return (parent?.name === '韵律诗篇' || parent?.name === '圣诗' || category.name === '韵律诗篇' || category.name === '圣诗');
+  }, [post, categories]);
 
   const renderers = useMemo(() => {
     function getText(tnode: any): string {
@@ -68,7 +79,7 @@ export default function PostDetailScreen() {
   const stackScreen = (
     <Stack.Screen 
         options={{ 
-          title: '讲道详情',
+          title: isHymn ? '诗歌详情' : '讲道详情',
           headerBackTitle: '返回',
           headerTintColor: '#2563eb',
           headerStyle: {
@@ -102,11 +113,15 @@ export default function PostDetailScreen() {
         }
       });
 
-      getPostById(postId)
-        .then(data => {
-          setPost(data);
+      Promise.all([
+          getPostById(postId),
+          getCategories()
+      ])
+        .then(([postData, cats]) => {
+          setPost(postData);
+          setCategories(cats);
           // Parse TOC
-          const tokens = marked.lexer(data.content);
+          const tokens = marked.lexer(postData.content);
           const headings = tokens
             .filter((t: any) => t.type === 'heading')
             .map((t: any, index: number) => ({
@@ -124,11 +139,6 @@ export default function PostDetailScreen() {
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (id) {
         const y = event.nativeEvent.contentOffset.y;
-        // Debounce or just save. Since AsyncStorage is async, maybe throttle?
-        // For simplicity, we just call it. It's async so it won't block UI much, 
-        // but ideally we should debounce.
-        // Let's just save every 1s or so if we wanted to be perfect, but here we rely on the OS handling async writes.
-        // To avoid too many writes, let's only save if y > 0.
         if (y > 0) {
             saveReadingProgress(Number(id), y);
         }
@@ -136,7 +146,6 @@ export default function PostDetailScreen() {
   }, [id]);
 
   // Scroll to initial position after content is ready
-  // We can use onLayout of the main view or just a timeout
   useEffect(() => {
     if (!loading && initialScrollY > 0 && scrollViewRef.current) {
         // Small delay to ensure layout is done
@@ -257,8 +266,6 @@ export default function PostDetailScreen() {
     setTocVisible(false);
     const y = headerPositionsRef.current[index];
     if (y !== undefined && scrollViewRef.current) {
-        // Scroll to the heading position + container position
-        // Subtract a small buffer (e.g. 20) so the title isn't stuck to the very top edge
         scrollViewRef.current.scrollTo({ 
             y: y + htmlContainerYRef.current, 
             animated: true 
@@ -275,19 +282,17 @@ export default function PostDetailScreen() {
             className="flex-1 bg-white dark:bg-black"
             contentContainerStyle={{ paddingBottom: 80 }}
             onScroll={handleScroll}
-            scrollEventThrottle={1000} // Only fire every 1s roughly (actually it's ms, so 16ms is 60fps. 1000 is 1s)
+            scrollEventThrottle={1000}
         >
             <View>
-                {post.coverImage ? (
                 <View className="w-full h-64 overflow-hidden">
                     <Image 
-                        source={{ uri: post.coverImage }} 
+                        source={{ uri: isHymn ? HYMN_FIXED_COVER : post.coverImage }} 
                         style={{ width: '100%', height: '100%' }}
                         contentFit="cover"
                         transition={500}
                     />
                 </View>
-                ) : null}
                 
                 <View className="px-4 pt-3">
                     <Text selectable className="text-2xl font-bold text-gray-900 dark:text-white mb-3 leading-tight">
@@ -307,6 +312,17 @@ export default function PostDetailScreen() {
 
                     {post.audioUrl && (
                         <AudioPlayer uri={post.audioUrl} title={post.title} />
+                    )}
+
+                    {/* Hymn Sheet Music Display */}
+                    {isHymn && post.coverImage && post.coverImage !== HYMN_FIXED_COVER && (
+                        <View className="my-6 rounded-xl overflow-hidden shadow-lg border border-gray-100 dark:border-gray-800">
+                            <Image 
+                                source={{ uri: post.coverImage }} 
+                                style={{ width: '100%', height: 500 }}
+                                contentFit="contain"
+                            />
+                        </View>
                     )}
                 </View>
             </View>

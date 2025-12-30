@@ -76,6 +76,10 @@ export default function BibleScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
+  // Touch tracking for smarter toggle
+  const touchStartX = useRef(0);
+  const touchStartY = useRef(0);
+
   const baseFontSize = 18 * fontScale;
   const verseLineHeight = 28 * fontScale;
 
@@ -311,6 +315,21 @@ export default function BibleScreen() {
     setShowControls(prev => !prev);
   };
 
+  const handleTouchStart = (e: any) => {
+    touchStartX.current = e.nativeEvent.pageX;
+    touchStartY.current = e.nativeEvent.pageY;
+  };
+
+  const handleTouchEnd = (e: any) => {
+    const deltaX = Math.abs(e.nativeEvent.pageX - touchStartX.current);
+    const deltaY = Math.abs(e.nativeEvent.pageY - touchStartY.current);
+    
+    // Only toggle if the touch movement is very small (deliberate tap, not a scroll)
+    if (deltaX < 10 && deltaY < 10) {
+      toggleControls();
+    }
+  };
+
   useEffect(() => {
     if (showBookModal || showChapterModal || showVerseModal || showTranslationModal || showHistoryModal) {
       setShowControls(true);
@@ -449,7 +468,7 @@ export default function BibleScreen() {
       setSelectedVersesForAction(newSet);
     } else {
       setSelectedVerse(verse.VerseSN);
-      toggleControls();
+      toggleControls(); // Re-enabled toggle on verse tap
     }
   };
 
@@ -538,8 +557,12 @@ export default function BibleScreen() {
             <ActivityIndicator size="large" color="#2563eb" />
           </View>
         ) : (
-          <TouchableWithoutFeedback onPress={toggleControls}>
-            <View className="flex-1">
+          <View 
+            className="flex-1"
+            onStartShouldSetResponder={() => true}
+            onResponderGrant={handleTouchStart}
+            onResponderRelease={handleTouchEnd}
+          >
               <FlatList
                 ref={flatListRef}
                 data={verses}
@@ -584,8 +607,7 @@ export default function BibleScreen() {
                   }
                 }}
               />
-            </View>
-          </TouchableWithoutFeedback>
+          </View>
         )}
       </View>
 
@@ -768,8 +790,9 @@ export default function BibleScreen() {
                       className={`w-[30%] mb-3 p-3 rounded-xl items-center border ${currentBook?.SN === book.SN ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-400' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-600'}`}
                       onPress={() => {
                         setCurrentBook(book);
-                        setCurrentChapter(1);
                         setShowBookModal(false);
+                        // Transition to chapter selection
+                        setTimeout(() => setShowChapterModal(true), 100);
                         setBookTab(book.NewOrOld === 0 ? 'old' : 'new');
                       }}
                     >
@@ -788,16 +811,21 @@ export default function BibleScreen() {
             <View className="bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm">
               <View className="flex-row justify-between items-center px-4 pt-3 pb-2">
                 <Text className="text-lg font-bold text-gray-900 dark:text-white">{currentBook.FullName} - 选择章节</Text>
-                <TouchableOpacity onPress={() => setShowChapterModal(false)}>
-                  <IconSymbol name="xmark.circle.fill" size={24} color="#9ca3af" />
-                </TouchableOpacity>
+                <View className="flex-row items-center">
+                    <TouchableOpacity onPress={() => { setShowChapterModal(false); setShowBookModal(true); }} className="mr-4">
+                        <Text className="text-blue-600 font-bold">返回</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => setShowChapterModal(false)}>
+                        <IconSymbol name="xmark.circle.fill" size={24} color="#9ca3af" />
+                    </TouchableOpacity>
+                </View>
               </View>
               <ScrollView className="max-h-72 px-4 pb-4">
                 <View className="flex-row flex-wrap gap-3 justify-center">
                   {Array.from({ length: currentBook.ChapterNumber }, (_, i) => i + 1).map(num => (
                     <TouchableOpacity
                       key={num}
-                      className={`w-14 h-14 rounded-2xl items-center justify-center border ${currentChapter === num ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-300' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-600'}`}
+                      className={`w-14 h-14 rounded-2xl items-center justify-center border ${currentChapter === num ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-300' : 'bg-white border-gray-200 dark:border-gray-800 dark:border-gray-600'}`}
                       onPress={() => {
                         setCurrentChapter(num);
                         setShowChapterModal(false);
@@ -849,18 +877,18 @@ export default function BibleScreen() {
         className="absolute bottom-0 left-0 right-0 z-50 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800"
         style={{
           paddingBottom: safeBottom,
-          height: 60 + safeBottom,
+          height: 50 + safeBottom,
           opacity: fadeAnim,
           transform: [{ 
             translateY: slideAnim.interpolate({
               inputRange: [-100, 0],
-              outputRange: [60 + safeBottom, 0] 
+              outputRange: [50 + safeBottom, 0] 
             }) 
           }],
         }}
         pointerEvents={showControls ? 'auto' : 'none'}
       >
-        <View className="flex-row justify-around items-center h-[60px]">
+        <View className="flex-row justify-around items-center flex-1">
           <TouchableOpacity 
             className="flex-1 items-center justify-center"
             onPress={() => router.push('/')}
@@ -882,6 +910,14 @@ export default function BibleScreen() {
           >
             <IconSymbol size={28} name="folder.fill" color={Colors[colorScheme ?? 'light'].tabIconDefault} />
             <Text style={{ color: Colors[colorScheme ?? 'light'].tabIconDefault, fontSize: 10, marginTop: 4 }}>分类</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            className="flex-1 items-center justify-center"
+            onPress={() => router.push('/hymns')}
+          >
+            <IconSymbol size={28} name="music.note" color={Colors[colorScheme ?? 'light'].tabIconDefault} />
+            <Text style={{ color: Colors[colorScheme ?? 'light'].tabIconDefault, fontSize: 10, marginTop: 4 }}>诗歌</Text>
           </TouchableOpacity>
         </View>
       </Animated.View>

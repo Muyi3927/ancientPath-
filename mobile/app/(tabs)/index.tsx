@@ -26,7 +26,6 @@ export default function HomeScreen() {
       setError(null);
       
       // Fetch ALL posts for client-side filtering
-      // Timeout is now handled in api.ts, which will fallback to cache on failure
       const [postsData, categoriesData] = await Promise.all([
         getPosts(),
         getCategories()
@@ -42,6 +41,29 @@ export default function HomeScreen() {
       setRefreshing(false);
     }
   };
+
+  const getDescendantIds = useCallback((rootId: number, allCats: Category[]): number[] => {
+    const fetchIds = (id: number): number[] => {
+        const children = allCats.filter(c => c.parentId === id);
+        let result = children.map(c => c.id);
+        children.forEach(child => {
+            result = [...result, ...fetchIds(child.id)];
+        });
+        return result;
+    };
+    return fetchIds(rootId);
+  }, []);
+
+  const excludedCategoryIds = useMemo(() => {
+    const excludedNames = ['韵律诗篇', '圣诗'];
+    const excludedRoots = categories.filter(c => excludedNames.includes(c.name));
+    let ids = new Set<number>();
+    excludedRoots.forEach(c => {
+        ids.add(c.id);
+        getDescendantIds(c.id, categories).forEach(id => ids.add(id));
+    });
+    return ids;
+  }, [categories, getDescendantIds]);
 
   useEffect(() => {
     const init = async () => {
@@ -86,15 +108,18 @@ export default function HomeScreen() {
 
   const filteredPosts = useMemo(() => {
     return allPosts.filter(post => {
+      // Exclude hidden categories
+      if (excludedCategoryIds.has(post.categoryId)) return false;
+
       // Filter by Category
       if (categoryId) {
         if (post.categoryId !== Number(categoryId)) return false;
       }
       return true;
     });
-  }, [allPosts, categoryId]);
+  }, [allPosts, categoryId, excludedCategoryIds]);
 
-  const featuredPosts = useMemo(() => allPosts.filter(p => p.isFeatured), [allPosts]);
+  const featuredPosts = useMemo(() => allPosts.filter(p => p.isFeatured && !excludedCategoryIds.has(p.categoryId)), [allPosts, excludedCategoryIds]);
 
   // Auto-play carousel
   useEffect(() => {
@@ -177,12 +202,12 @@ export default function HomeScreen() {
   const renderHeader = () => (
     <View 
       className="bg-slate-100 dark:bg-black"
-      style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 10 : 10 }}
+      style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 5 : 5 }}
     >
-      <View className="items-center mb-4 px-4">
+      <View className="items-center mb-2 px-4">
         <Link href="/about" asChild>
           <TouchableOpacity>
-            <Text className="text-3xl font-bold text-slate-900 dark:text-white font-serif tracking-tight">访问古道</Text>
+            <Text className="text-2xl font-bold text-slate-900 dark:text-white font-serif tracking-tight">访问古道</Text>
           </TouchableOpacity>
         </Link>
       </View>
