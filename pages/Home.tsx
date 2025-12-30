@@ -55,15 +55,28 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
   // 递归获取所有子分类 ID (Memoized to avoid recalculation on every render)
   const getDescendantIds = useMemo(() => {
-      return (rootId: number): number[] => {
+      const fetchDescendants = (rootId: number): number[] => {
           const children = categories.filter(c => c.parentId == rootId); // Use == for loose comparison
           let ids = children.map(c => c.id);
           children.forEach(child => {
-              ids = [...ids, ...getDescendantIds(child.id)];
+              ids = [...ids, ...fetchDescendants(child.id)];
           });
           return ids;
       };
+      return fetchDescendants;
   }, [categories]);
+
+  // 排除诗歌类目 (韵律诗篇, 圣诗)
+  const excludedCategoryIds = useMemo(() => {
+      const excludedNames = ['韵律诗篇', '圣诗'];
+      const excludedRoots = categories.filter(c => excludedNames.includes(c.name));
+      let ids = new Set<number>();
+      excludedRoots.forEach(c => {
+          ids.add(c.id);
+          getDescendantIds(c.id).forEach(id => ids.add(id));
+      });
+      return ids;
+  }, [categories, getDescendantIds]);
 
   // 计算分类文章数量 (包含子分类，递归)
   const getCategoryCount = (catId: number) => {
@@ -71,16 +84,23 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       
       return posts.filter(p => {
           const pCatId = Number(p.categoryId);
-          return targetIds.has(pCatId);
+          return targetIds.has(pCatId) && !excludedCategoryIds.has(pCatId);
       }).length;
   };
 
   // 计算标签权重
   const tagCounts = useMemo(() => {
       const counts: Record<string, number> = {};
-      posts.forEach(p => p.tags.forEach(t => counts[t] = (counts[t] || 0) + 1));
+      posts.forEach(p => {
+          // Exclude posts from hidden categories for tags too? Maybe. 
+          // User said "poetry categories... do not appear on home page". 
+          // Usually implies tags from them shouldn't clutter home either.
+          if (!excludedCategoryIds.has(Number(p.categoryId))) {
+             p.tags.forEach(t => counts[t] = (counts[t] || 0) + 1);
+          }
+      });
       return counts;
-  }, [posts]);
+  }, [posts, excludedCategoryIds]);
 
   const getTagSizeClass = (count: number) => {
       if (count >= 10) return 'text-lg font-bold';
@@ -90,6 +110,9 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
+      // 排除隐藏分类
+      if (excludedCategoryIds.has(Number(post.categoryId))) return false;
+
       // 分类逻辑：包含精确匹配 OR 如果文章分类是选中分类的子分类 (递归)
       let matchesCategory = true;
       if (activeCategoryId !== null) {
@@ -105,13 +128,13 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
         : true;
       return matchesCategory && matchesSearch && matchesTag;
     });
-  }, [posts, activeCategoryId, searchQuery, tagFilter, categories]);
+  }, [posts, activeCategoryId, searchQuery, tagFilter, categories, excludedCategoryIds]);
 
   // 分页逻辑
   const totalPages = Math.ceil(filteredPosts.length / ITEMS_PER_PAGE);
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const featuredPosts = useMemo(() => posts.filter((p) => p.isFeatured), [posts]);
+  const featuredPosts = useMemo(() => posts.filter((p) => p.isFeatured && !excludedCategoryIds.has(Number(p.categoryId))), [posts, excludedCategoryIds]);
 
   // 轮播图自动播放
   useEffect(() => {
@@ -151,8 +174,8 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
   // 递归渲染分类树
   const renderCategoryTree = (parentId: number | null = null, level = 0) => {
-      // 查找当前层级的分类（parentId 匹配）
-      const cats = categories.filter((c) => c.parentId === parentId);
+      // 查找当前层级的分类（parentId 匹配），并排除被隐藏的分类
+      const cats = categories.filter((c) => c.parentId === parentId && !excludedCategoryIds.has(c.id));
       
       if (cats.length === 0) return null;
 
@@ -195,7 +218,12 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
   };
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-4 md:space-y-8">
+      {/* Mobile Title */}
+      <div className="md:hidden pt-2 text-center">
+          <h1 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">访问古道</h1>
+      </div>
+
       {/* Featured Carousel Section */}
       {!searchQuery && !tagFilter && !activeCategoryId && featuredPosts.length > 0 && (
         <div className="relative w-full h-56 md:h-96 rounded-2xl overflow-hidden shadow-2xl mb-8 md:mb-12 group">

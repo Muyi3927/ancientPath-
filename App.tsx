@@ -8,7 +8,9 @@ import { Login } from './pages/Login';
 import { About } from './pages/About';
 import { Bible } from './pages/Bible';
 import { Categories } from './pages/Categories';
+import { Hymns } from './pages/Hymns';
 import { DownloadApp } from './pages/DownloadApp';
+import { Drafts } from './pages/Drafts';
 import { ThemeContextType, AuthContextType, User, UserRole, BlogPost, Category } from './types';
 import { getPosts, getCategories, createCategory, deleteCategory as apiDeleteCategory, deletePost } from './services/api';
 
@@ -218,6 +220,7 @@ const App: React.FC = () => {
               <Route path="/about" element={<About />} />
               <Route path="/bible" element={<Bible />} />
               <Route path="/categories" element={<Categories />} />
+              <Route path="/hymns" element={<Hymns />} />
               <Route path="/app" element={<DownloadApp />} />
               <Route path="/post/:id" element={<PostDetail posts={posts} updatePost={updatePostInState} onDeletePost={handleDeletePost} categories={categories} />} />
               <Route path="/login" element={<Login />} />
@@ -234,6 +237,7 @@ const App: React.FC = () => {
                   />
                 } 
               />
+              <Route path="/drafts" element={<Drafts />} />
               <Route 
                 path="/editor/:id" 
                 element={

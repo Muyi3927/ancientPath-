@@ -196,7 +196,7 @@ export const Bible: React.FC = () => {
         </div>
 
         {/* Header */}
-        <div className={`absolute left-0 right-0 h-14 md:h-16 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white dark:bg-gray-900 z-10 flex-shrink-0 transition-all duration-500 ease-in-out ${!isMenuVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`} style={{ top: '64px' }}>
+        <div className={`absolute left-0 right-0 h-14 md:h-16 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white dark:bg-gray-900 z-10 flex-shrink-0 transition-all duration-500 ease-in-out ${!isMenuVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`} style={{ top: window.innerWidth < 768 ? '0px' : '64px' }}>
           <div className="flex items-center flex-1 min-w-0">
               <button 
                   className="hidden md:block mr-4 p-2 -ml-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
@@ -275,7 +275,7 @@ export const Bible: React.FC = () => {
         {/* Verses Area */}
         <div 
           ref={versesContainerRef}
-          className="flex-1 overflow-y-auto p-4 md:p-8 pt-32 md:pt-36 bg-white dark:bg-gray-900 cursor-pointer"
+          className="flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-36 bg-white dark:bg-gray-900 cursor-pointer"
           onClick={() => setMenuVisible(!isMenuVisible)}
         >
           {loading ? (

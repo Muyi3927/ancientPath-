@@ -48,7 +48,7 @@ export const About: React.FC = () => {
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-16 pb-20 px-4 sm:px-6">
+    <div className="max-w-5xl mx-auto space-y-8 md:space-y-16 pb-20 px-4 sm:px-6">
       {/* Modal */}
       <Modal 
         isOpen={!!modalData} 
@@ -59,8 +59,11 @@ export const About: React.FC = () => {
       />
 
       {/* Header */}
-      <div className="text-center space-y-8 py-12">
-        <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white tracking-tight">关于访问古道</h1>
+      <div className="text-center space-y-8 py-6 md:py-12">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
+            <img src="/logo.svg" alt="Logo" className="w-16 h-16 md:w-20 md:h-20 rounded-2xl shadow-xl" />
+            <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white tracking-tight">关于访问古道</h1>
+        </div>
         
         <div className="max-w-3xl mx-auto">
             <blockquote className="text-lg md:text-xl italic text-slate-600 dark:text-slate-300 border-l-4 border-primary-500 pl-6 py-4 my-8 font-serif bg-slate-50 dark:bg-slate-900/50 rounded-r-xl text-left shadow-sm leading-relaxed">

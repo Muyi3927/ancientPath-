@@ -33,8 +33,12 @@ export const Categories: React.FC = () => {
       try {
         const [cats, posts] = await Promise.all([getCategories(), getPosts()]);
         
+        // Exclude Hymns/Poetry categories from this general list
+        const excludedNames = ['韵律诗篇', '圣诗'];
+        const visibleCats = cats.filter(c => !excludedNames.includes(c.name));
+
         // Sort categories
-        const sortedCats = cats.sort((a, b) => {
+        const sortedCats = visibleCats.sort((a, b) => {
             const indexA = BIBLE_ORDER.indexOf(a.name);
             const indexB = BIBLE_ORDER.indexOf(b.name);
 
@@ -76,21 +80,24 @@ export const Categories: React.FC = () => {
 
   const activeCategoryId = selectedL2Id || selectedL1Id;
 
-  const getDescendantIds = (rootId: number): number[] => {
+  const getDescendantIds = useMemo(() => {
+    const fetchDescendants = (rootId: number): number[] => {
       const children = categories.filter(c => c.parentId === rootId);
       let ids = children.map(c => c.id);
       children.forEach(child => {
-          ids = [...ids, ...getDescendantIds(child.id)];
+          ids = [...ids, ...fetchDescendants(child.id)];
       });
       return ids;
-  };
+    };
+    return fetchDescendants;
+  }, [categories]);
 
   const filteredPosts = useMemo(() => {
     if (!activeCategoryId) return [];
     
     const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId)]);
     return allPosts.filter(p => targetIds.has(p.categoryId));
-  }, [allPosts, activeCategoryId, categories]);
+  }, [allPosts, activeCategoryId, categories, getDescendantIds]);
 
   const handleL1Select = (id: number) => {
     setSelectedL1Id(id);
@@ -131,8 +138,8 @@ export const Categories: React.FC = () => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Vertical L2 Categories */}
-        <div className="w-24 md:w-64 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
-          <div className="p-1 md:p-2 space-y-1">
+        <div className="w-28 md:w-64 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
+          <div className="p-1 md:p-2 pb-24 space-y-1">
             <button
               onClick={() => setSelectedL2Id(null)}
               className={`w-full text-left px-2 md:px-4 py-2 md:py-3 rounded-lg text-xs md:text-sm font-medium transition-all ${

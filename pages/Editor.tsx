@@ -1,5 +1,5 @@
 import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
 import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
@@ -21,6 +21,8 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const { id: idString } = useParams<{ id: string }>();
   const id = idString ? Number(idString) : undefined;
   const { user, isAdmin } = useContext(AuthContext);
+  const location = useLocation();
+  const draftState = location.state as { draft?: any };
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -40,6 +42,9 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
+  // Draft State
+  const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
+
   // Category Creation/Management State
   const [isManagingCategory, setIsManagingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -68,7 +73,19 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   }, [posts]);
 
   useEffect(() => {
-    if (id && posts.length > 0) {
+    if (draftState?.draft) {
+        const d = draftState.draft;
+        setTitle(d.title);
+        setContent(d.content);
+        setExcerpt(d.excerpt);
+        setCategoryId(d.categoryId);
+        setCurrentTags(d.currentTags);
+        setCoverImage(d.coverImage);
+        setAudioUrl(d.audioUrl);
+        setIsFeatured(d.isFeatured);
+        // Clear history state to prevent reloading draft on refresh/back if desired, 
+        // but keeping it is fine.
+    } else if (id && posts.length > 0) {
       const post = posts.find(p => p.id === id);
       if (post) {
         setTitle(post.title);
@@ -218,11 +235,37 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
     }
   };
 
+  const handleSaveDraft = () => {
+      const draftData = {
+          title,
+          content,
+          excerpt,
+          categoryId,
+          currentTags,
+          coverImage,
+          audioUrl,
+          isFeatured,
+          timestamp: Date.now()
+      };
+      
+      // Save to LocalStorage with a unique key or list
+      const drafts = JSON.parse(localStorage.getItem('admin_drafts') || '[]');
+      // If editing an existing draft (by ID if we had one, or title match?), for now just append new
+      // Or checking if we are editing an ID?
+      // Let's just save as a new entry for "Temporary Drafts"
+      drafts.unshift(draftData);
+      localStorage.setItem('admin_drafts', JSON.stringify(drafts));
+      setLastDraftSave(new Date().toLocaleTimeString());
+      alert('草稿已保存到本地！');
+  };
+
   const handleSave = async () => {
     if (!title || !content || categoryId === undefined) return alert("标题、内容和分类不能为空");
     
     setIsSubmitting(true);
-    const finalCoverImage = coverImage || `https://picsum.photos/800/400?random=${Math.floor(Math.random()*100)}`;
+    // const finalCoverImage = coverImage || `https://picsum.photos/800/400?random=${Math.floor(Math.random()*100)}`;
+    // User requested no automatic random image.
+    const finalCoverImage = coverImage;
     const finalExcerpt = excerpt.trim() || (content.substring(0, 100) + '...');
 
     const postData = {
@@ -285,6 +328,12 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             className="px-4 py-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center text-sm font-medium transition-colors"
            >
              {previewMode ? <><Edit3 className="w-4 h-4 mr-2"/> 编辑</> : <><Eye className="w-4 h-4 mr-2"/> 预览</>}
+           </button>
+           <button 
+            onClick={handleSaveDraft}
+            className="px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-800 flex items-center text-sm font-bold transition-colors"
+           >
+             <Save className="w-4 h-4 mr-2" /> 存草稿
            </button>
            <button 
             onClick={handleSave}

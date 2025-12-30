@@ -159,7 +159,6 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                   <div className="flex items-center gap-4 mb-4 text-sm text-slate-300">
                      <span className="bg-primary-600 px-2 py-0.5 rounded text-white text-xs font-bold">{categoryName}</span>
                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {format(post.createdAt, 'yyyy年M月d日')}</span>
-                     <span className="flex items-center gap-1"><User className="w-3 h-3" /> {post.author.username}</span>
                   </div>
               </div>
               <h1 className="text-3xl md:text-5xl font-serif font-bold leading-tight shadow-sm">{post.title}</h1>
