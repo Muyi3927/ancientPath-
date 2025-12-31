@@ -12,7 +12,7 @@ export default defineConfig({
         navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/]
       },
       devOptions: {
-        enabled: true
+        enabled: false
       },
       includeAssets: ['logo.svg', 'robots.txt', 'sitemap.xml'],
       manifest: {

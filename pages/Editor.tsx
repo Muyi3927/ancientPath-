@@ -2,10 +2,11 @@ import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
-import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
+import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
 import { generateSummary } from '../services/aiService';
+import { compressImage } from '../services/imageOptimizer';
 
 interface EditorProps {
   onSave: (post: BlogPost) => void;
@@ -15,6 +16,17 @@ interface EditorProps {
   posts: BlogPost[];
   onRefresh: () => Promise<void>;
 }
+
+const PRESET_COLORS = [
+    { color: '#ef4444', name: '红色' },
+    { color: '#f97316', name: '橙色' },
+    { color: '#eab308', name: '黄色' },
+    { color: '#22c55e', name: '绿色' },
+    { color: '#3b82f6', name: '蓝色' },
+    { color: '#a855f7', name: '紫色' },
+    { color: '#64748b', name: '灰色' },
+    { color: '#000000', name: '黑色' },
+];
 
 export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategory, onDeleteCategory, posts, onRefresh }) => {
   const navigate = useNavigate();
@@ -42,6 +54,8 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  
   // Draft State
   const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
 
@@ -58,6 +72,8 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   // Refs for file inputs
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const contentImageInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const suggestedTags = useMemo(() => {
     const allTags = new Set<string>();
@@ -108,6 +124,57 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   if (!user || !isAdmin) {
     return <div className="text-center py-20 text-red-500 font-bold">拒绝访问。仅限管理员。</div>;
   }
+
+  // Markdown Helper
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const scrollTop = textarea.scrollTop;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+
+    const newText = before + prefix + selection + suffix + after;
+    setContent(newText);
+    
+    // Restore focus, selection and scroll position
+    setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
+        textarea.scrollTop = scrollTop;
+    }, 0);
+  };
+
+  const handleColorClick = (color: string) => {
+    insertMarkdown(`<span style="color: ${color}">`, '</span>');
+    setShowColorPicker(false);
+  };
+
+  const handleContentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+        let fileToUpload = file;
+        try {
+            fileToUpload = await compressImage(file);
+        } catch (e) {
+            console.error("Content image compression failed, using original", e);
+        }
+
+        const publicUrl = await uploadFile(fileToUpload);
+        insertMarkdown(`![图片描述](${publicUrl})`);
+    } catch (e) {
+        alert('图片上传失败');
+        console.error(e);
+    } finally {
+        e.target.value = '';
+    }
+  };
 
   // Tag Management Functions
   const handleRenameTag = async (oldTag: string) => {
@@ -188,7 +255,17 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       if (type === 'image') setUploadingImage(true);
       else setUploadingAudio(true);
 
-      const publicUrl = await uploadFile(file);
+      let fileToUpload = file;
+      if (type === 'image') {
+         try {
+             fileToUpload = await compressImage(file);
+         } catch (optErr) {
+             console.error("图片压缩失败，将使用原图上传:", optErr);
+             // 继续上传原图
+         }
+      }
+
+      const publicUrl = await uploadFile(fileToUpload);
 
       if (type === 'image') setCoverImage(publicUrl);
       else setAudioUrl(publicUrl);
@@ -313,9 +390,9 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   };
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col">
+    <div className="h-full flex flex-col p-4">
       {/* Header Controls */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-none">
         <div className="flex items-center gap-4">
             <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 transition-colors">
                 <ArrowLeft className="w-5 h-5" />
@@ -624,12 +701,76 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             </div>
 
             {/* Markdown Area */}
-            <div className="flex-grow p-1">
+            <div className="flex-grow flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                {/* Toolbar */}
+                <div className="flex items-center gap-1 p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
+                    <button onClick={() => insertMarkdown('**', '**')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="加粗">
+                        <Bold className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('*', '*')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="斜体">
+                        <Italic className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<small>', '</small>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="小字">
+                        <Minimize className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    <button onClick={() => insertMarkdown('### ')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="标题">
+                        <Heading className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('> ')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="引用">
+                        <Quote className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('[', '](url "描述")')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="链接">
+                        <LinkIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('\n---\n')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="分割线">
+                        <Minus className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowColorPicker(!showColorPicker)} 
+                            className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 ${showColorPicker ? 'bg-slate-200 dark:bg-slate-800 text-primary-600' : 'text-slate-600 dark:text-slate-400'}`} 
+                            title="字体颜色"
+                        >
+                            <Palette className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Color Picker Popup */}
+                        {showColorPicker && (
+                            <div className="absolute top-full left-0 mt-2 p-2 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 grid grid-cols-4 gap-2 w-48">
+                                {PRESET_COLORS.map((c) => (
+                                    <button
+                                        key={c.color}
+                                        onClick={() => handleColorClick(c.color)}
+                                        className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-600 hover:scale-110 transition-transform"
+                                        style={{ backgroundColor: c.color }}
+                                        title={c.name}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => contentImageInputRef.current?.click()} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="插入图片">
+                        <ImageIcon className="w-4 h-4" />
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={contentImageInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleContentImageUpload} 
+                    />
+                </div>
+                
                 <textarea 
+                    ref={textareaRef}
                     value={content}
                     onChange={e => setContent(e.target.value)}
                     placeholder="使用 Markdown 开始写作..."
-                    className="w-full h-full bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-primary-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                    className="w-full flex-grow p-6 focus:outline-none resize-none font-mono text-sm leading-relaxed bg-transparent"
                 />
             </div>
         </div>

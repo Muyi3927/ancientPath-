@@ -44,7 +44,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   };
 
   const isActive = (path: string) => location.pathname === path;
-  const isFullWidthPage = ['/bible', '/categories', '/hymns'].includes(location.pathname);
+  const isFullWidthPage = ['/bible', '/categories', '/hymns'].includes(location.pathname) || location.pathname.startsWith('/editor');
   const isBiblePage = location.pathname === '/bible';
 
   return (

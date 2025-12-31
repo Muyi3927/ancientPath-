@@ -33,3 +33,5 @@ backend/.dev.vars
 !.env.example
 
 scripts/*
+
+CosyVoice/*
