@@ -1,7 +1,8 @@
 import React from 'react';
-import { View, Text, ScrollView, useColorScheme, TouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, useColorScheme, TouchableOpacity, useWindowDimensions } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import Markdown from 'react-native-markdown-display';
+import RenderHtml from 'react-native-render-html';
+import { marked } from 'marked';
 import { aboutContent } from '../constants/AboutData';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -104,6 +105,32 @@ function SectionHeader({ title, subtitle, icon }: { title: string, subtitle?: st
 function ExpandableCard({ title, subtitle, content, isDark }: { title: string, subtitle?: string, content: string, isDark: boolean }) {
     const [expanded, setExpanded] = React.useState(false);
     const router = useRouter();
+    const { width } = useWindowDimensions();
+
+    const htmlSource = React.useMemo(() => {
+        return { html: marked.parse(content) as string };
+    }, [content]);
+
+    const tagsStyles: any = {
+        body: { color: isDark ? '#cbd5e1' : '#334155', fontSize: 15, lineHeight: 26 },
+        h1: { color: isDark ? '#fff' : '#0f172a', marginTop: 16, marginBottom: 12, fontSize: 18, fontWeight: 'bold' },
+        h2: { color: isDark ? '#f1f5f9' : '#1e293b', marginTop: 16, marginBottom: 10, fontSize: 16, fontWeight: 'bold' },
+        blockquote: { 
+            backgroundColor: isDark ? '#1e293b' : '#f8fafc', 
+            borderLeftColor: '#3b82f6', 
+            borderLeftWidth: 4, 
+            paddingHorizontal: 12, 
+            paddingVertical: 12,
+            fontStyle: 'normal', 
+            color: isDark ? '#94a3b8' : '#475569', 
+            borderRadius: 8, 
+            marginVertical: 8 
+        },
+        ul: { marginBottom: 12 },
+        ol: { marginBottom: 12 },
+        p: { marginBottom: 12 },
+        a: { color: '#2563eb', textDecorationLine: 'none' }
+    };
 
     return (
         <View className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-4 overflow-hidden">
@@ -122,29 +149,23 @@ function ExpandableCard({ title, subtitle, content, isDark }: { title: string, s
             
             {expanded && (
                 <View className="px-5 pb-5 pt-4 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800">
-                    <Markdown 
-                        style={{
-                            body: { color: isDark ? '#cbd5e1' : '#334155', fontSize: 15, lineHeight: 26 },
-                            heading1: { color: isDark ? '#fff' : '#0f172a', marginTop: 16, marginBottom: 12, fontSize: 18, fontWeight: 'bold' },
-                            heading2: { color: isDark ? '#f1f5f9' : '#1e293b', marginTop: 16, marginBottom: 10, fontSize: 16, fontWeight: 'bold' },
-                            blockquote: { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderLeftColor: '#3b82f6', borderLeftWidth: 4, padding: 12, fontStyle: 'normal', color: isDark ? '#94a3b8' : '#475569', borderRadius: 8, marginVertical: 8 },
-                            bullet_list: { marginBottom: 12 },
-                            ordered_list: { marginBottom: 12 },
-                            paragraph: { marginBottom: 12 },
-                        }}
-                        onLinkPress={(url) => {
-                            if (url && url.includes('/post/')) {
-                                const id = url.split('/post/')[1];
-                                if (id) {
-                                  router.push(`/post/${id}`);
-                                  return false;
+                    <RenderHtml
+                        contentWidth={width - 40}
+                        source={htmlSource}
+                        tagsStyles={tagsStyles}
+                        renderersProps={{
+                            a: {
+                                onPress: (_, href) => {
+                                    if (href && href.includes('/post/')) {
+                                        const id = href.split('/post/')[1];
+                                        if (id) {
+                                            router.push(`/post/${id}`);
+                                        }
+                                    }
                                 }
                             }
-                            return true;
                         }}
-                    >
-                        {content}
-                    </Markdown>
+                    />
                 </View>
             )}
         </View>

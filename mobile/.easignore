@@ -1,0 +1,13 @@
+# Ignore dev-only files and folders to reduce build upload size
+scripts/
+__pycache__/
+*.py
+*.md
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+node_modules/
+.expo/
+dist/
+web-build/
