@@ -43,6 +43,9 @@ const MAPPING = {
   'highlighter': 'highlight',
   'checkmark.circle.fill': 'check-circle',
   'clock.fill': 'history',
+  'rotate.right': 'rotate-right',
+  'rotate.left': 'rotate-left',
+  'textformat.size': 'format-size',
 } as IconMapping;
 
 /**

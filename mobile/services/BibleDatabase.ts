@@ -7,8 +7,10 @@ type VersionConfig = {
   asset: number;
   booksQuery: string;
   versesQuery: string;
+  searchQuery?: string;
   bookParams?: () => any[];
   verseParams?: (bookId: number, chapter: number) => any[];
+  searchParams?: (query: string) => any[];
 };
 
 const VERSION_CONFIG = {
@@ -19,8 +21,11 @@ const VERSION_CONFIG = {
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
       'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE VolumeSN = ? AND ChapterSN = ? ORDER BY VerseSN ASC',
+    searchQuery:
+      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC LIMIT 100',
     bookParams: () => [],
     verseParams: (bookId, chapter) => [bookId, chapter],
+    searchParams: (query) => [`%${query}%`],
   },
   cnv: {
     dbName: 'bible_cnv.db',
@@ -29,8 +34,11 @@ const VERSION_CONFIG = {
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
       'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE VolumeSN = ? AND ChapterSN = ? ORDER BY VerseSN ASC',
+    searchQuery:
+      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC LIMIT 100',
     bookParams: () => [],
     verseParams: (bookId, chapter) => [bookId, chapter],
+    searchParams: (query) => [`%${query}%`],
   },
   asv: {
     dbName: 'ASV.db',
@@ -39,10 +47,14 @@ const VERSION_CONFIG = {
       'SELECT b.id AS SN, b.name AS FullName, b.name AS ShortName, CASE WHEN b.id <= 39 THEN 0 ELSE 1 END AS NewOrOld, MAX(v.chapter) AS ChapterNumber FROM ASV_books b JOIN ASV_verses v ON v.book_id = b.id GROUP BY b.id ORDER BY b.id ASC',
     versesQuery:
       'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE book_id = ? AND chapter = ? ORDER BY verse ASC',
+    searchQuery:
+      'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE text LIKE ? ORDER BY book_id, chapter, verse ASC LIMIT 100',
     bookParams: () => [],
     verseParams: (bookId, chapter) => [bookId, chapter],
+    searchParams: (query) => [`%${query}%`],
   },
-} as const satisfies Record<string, VersionConfig>;
+} as const satisfies Record<string, VersionConfig & { searchQuery?: string; searchParams?: (query: string) => any[] }>;
+
 
 export type BibleVersionKey = keyof typeof VERSION_CONFIG;
 
@@ -147,4 +159,17 @@ export const getVerses = async (bookId: number, chapter: number): Promise<BibleV
 export const getBook = async (bookId: number): Promise<BibleBook | null> => {
   const books = await getBooks();
   return books.find(b => b.SN === bookId) ?? null;
+};
+
+export const searchVerses = async (query: string): Promise<BibleVerse[]> => {
+  const database = await initDatabase();
+  const config = VERSION_CONFIG[activeVersion];
+  
+  if (!config.searchQuery) return [];
+
+  const rows = await database.getAllAsync<any>(
+    config.searchQuery,
+    config.searchParams ? config.searchParams(query) : []
+  );
+  return rows as BibleVerse[];
 };

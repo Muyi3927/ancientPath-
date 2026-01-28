@@ -29,6 +29,7 @@ export default function AudioPlayer({ uri, title = 'Audio' }: AudioPlayerProps) 
 
   const [rate, setRate] = useState(1.0);
   const [isPending, setIsPending] = useState(false);
+  const [cachedDuration, setCachedDuration] = useState(0);
 
   // Ensure URI is absolute
   const fullUri = uri.startsWith('http') ? uri : `${API_BASE_URL}${uri}`;
@@ -40,7 +41,14 @@ export default function AudioPlayer({ uri, title = 'Audio' }: AudioPlayerProps) 
   const isPlaying = isCurrentTrack ? isGlobalPlaying : false;
   const isLoading = isCurrentTrack ? isGlobalLoading : false;
   const position = isCurrentTrack ? globalPosition : 0;
-  const duration = isCurrentTrack ? globalDuration : 0;
+  
+  useEffect(() => {
+    if (isCurrentTrack && globalDuration > 0) {
+      setCachedDuration(globalDuration);
+    }
+  }, [isCurrentTrack, globalDuration]);
+
+  const duration = isCurrentTrack ? globalDuration : cachedDuration;
 
   const handlePlayPress = async () => {
     if (isPending) return;

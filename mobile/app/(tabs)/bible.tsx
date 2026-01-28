@@ -10,6 +10,10 @@ import {
   TouchableWithoutFeedback,
   Alert,
   Animated,
+  Modal,
+  TextInput,
+  Keyboard,
+  Platform,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, useRouter } from 'expo-router';
@@ -18,6 +22,7 @@ import { Colors } from '@/constants/theme';
 import {
   getBooks,
   getVerses,
+  searchVerses,
   BibleBook,
   BibleVerse,
   setActiveBibleVersion,
@@ -26,6 +31,8 @@ import {
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Gesture, GestureDetector, Directions } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
 const HIGHLIGHT_STORAGE_KEY = 'bible_highlights';
 const READING_HISTORY_KEY = 'bible_reading_history';
@@ -67,10 +74,18 @@ export default function BibleScreen() {
   const [showTranslationModal, setShowTranslationModal] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [readingHistory, setReadingHistory] = useState<{bookSN: number, chapter: number, timestamp: number, bookName: string}[]>([]);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   
   // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedVersesForAction, setSelectedVersesForAction] = useState<Set<number>>(new Set());
+
+  // Search State
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const flatListRef = useRef<FlatList>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -82,6 +97,8 @@ export default function BibleScreen() {
 
   const baseFontSize = 18 * fontScale;
   const verseLineHeight = 28 * fontScale;
+
+  const [pendingScrollVerse, setPendingScrollVerse] = useState<number | null>(null);
 
   useEffect(() => {
     // Animate Controls
@@ -432,7 +449,7 @@ export default function BibleScreen() {
     // If user wants to remove, they can tap individually or we can add "Remove Highlight" button later.
     // But wait, user said "Highlight" button.
     // Let's just toggle the first one's state for all? No, that's confusing.
-    // Let's just set all to true.
+    // Let's set all to true.
     if (!hasChanges) {
        // If all are already highlighted, let's unhighlight them all.
        selectedVersesForAction.forEach(sn => {
@@ -530,6 +547,80 @@ export default function BibleScreen() {
   const oldTestamentBooks = books.filter(b => b.NewOrOld === 0);
   const newTestamentBooks = books.filter(b => b.NewOrOld === 1);
 
+  const performSearch = async () => {
+    if (!searchQuery.trim()) {
+       setHasSearched(false);
+       return;
+    }
+    setIsSearching(true);
+    setHasSearched(true);
+    Keyboard.dismiss();
+    try {
+        const results = await searchVerses(searchQuery);
+        setSearchResults(results);
+    } catch (e) {
+        console.error(e);
+        Alert.alert('搜索失败', '请稍后再试');
+    } finally {
+        setIsSearching(false);
+    }
+  };
+
+  const renderSearchResult = ({ item }: { item: BibleVerse }) => {
+    const book = books.find(b => b.SN === item.VolumeSN);
+    return (
+        <TouchableOpacity 
+            className="py-3 border-b border-gray-100 dark:border-gray-800"
+            onPress={() => {
+                if (book) {
+                    setCurrentBook(book);
+                    setCurrentChapter(item.ChapterSN);
+                    setPendingScrollVerse(item.VerseSN);
+                    setShowSearchModal(false);
+                }
+            }}
+        >
+            <View className="flex-row justify-between mb-1">
+                <Text className="text-blue-600 font-bold dark:text-blue-400 text-base">
+                    {book?.FullName} {item.ChapterSN}:{item.VerseSN}
+                </Text>
+            </View>
+            <Text className="text-base text-gray-800 dark:text-gray-200 leading-6" numberOfLines={2}>
+                {item.Lection}
+            </Text>
+        </TouchableOpacity>
+    );
+  };
+
+  useEffect(() => {
+    if (verses.length > 0 && pendingScrollVerse !== null) {
+      const index = verses.findIndex(v => v.VerseSN === pendingScrollVerse);
+      if (index !== -1) {
+          setSelectedVerse(pendingScrollVerse);
+          setTimeout(() => {
+              flatListRef.current?.scrollToIndex({ index, animated: true, viewPosition: 0.1 });
+          }, 500);
+      }
+      setPendingScrollVerse(null);
+    }
+  }, [verses, pendingScrollVerse]);
+
+  const flingLeft = Gesture.Fling()
+    .direction(Directions.LEFT)
+    .runOnJS(true)
+    .onEnd(() => {
+      handleNextChapter();
+    });
+
+  const flingRight = Gesture.Fling()
+    .direction(Directions.RIGHT)
+    .runOnJS(true)
+    .onEnd(() => {
+      handlePrevChapter();
+    });
+
+  const gestures = Gesture.Simultaneous(flingLeft, flingRight);
+
   return (
     <View
       className="flex-1 bg-white dark:bg-black"
@@ -557,57 +648,59 @@ export default function BibleScreen() {
             <ActivityIndicator size="large" color="#2563eb" />
           </View>
         ) : (
-          <View 
-            className="flex-1"
-            onStartShouldSetResponder={() => true}
-            onResponderGrant={handleTouchStart}
-            onResponderRelease={handleTouchEnd}
-          >
-              <FlatList
-                ref={flatListRef}
-                data={verses}
-                renderItem={renderVerse}
-                keyExtractor={item => item.ID.toString()}
-                extraData={{ selectedVerse, highlightedVerses }}
-                contentContainerStyle={{
-                  paddingHorizontal: 0,
-                  paddingBottom: 80 + safeBottom, // Add extra padding for the bottom bar
-                }}
-                showsVerticalScrollIndicator={false}
-                ListFooterComponent={() => {
-                  const hasPrev = currentBook && (currentBook.SN > 1 || currentChapter > 1);
-                  const hasNext = currentBook && (currentBook.SN < 66 || currentChapter < currentBook.ChapterNumber);
-                  
-                  return (
-                    <View className="px-4 pt-6 pb-12">
-                      <View className="flex-row justify-between bg-white/95 dark:bg-gray-900/95 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 shadow-sm">
-                        <TouchableOpacity
-                          onPress={handlePrevChapter}
-                          disabled={!hasPrev}
-                          className="flex-row items-center"
-                        >
-                          <IconSymbol name="chevron.left" size={18} color={hasPrev ? "#2563eb" : "#9ca3af"} />
-                          <Text className={`ml-1 font-semibold ${hasPrev ? 'text-blue-600' : 'text-gray-400'}`}>上一章</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={handleNextChapter}
-                          disabled={!hasNext}
-                          className="flex-row items-center"
-                        >
-                          <Text className={`mr-1 font-semibold ${hasNext ? 'text-blue-600' : 'text-gray-400'}`}>下一章</Text>
-                          <IconSymbol name="chevron.right" size={18} color={hasNext ? "#2563eb" : "#9ca3af"} />
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  );
-                }}
-                onScrollToIndexFailed={({ index, averageItemLength }) => {
-                  if (averageItemLength) {
-                    flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true });
-                  }
-                }}
-              />
-          </View>
+          <GestureDetector gesture={gestures}>
+            <View 
+                className="flex-1"
+                onStartShouldSetResponder={() => true}
+                onResponderGrant={handleTouchStart}
+                onResponderRelease={handleTouchEnd}
+            >
+                <FlatList
+                    ref={flatListRef}
+                    data={verses}
+                    renderItem={renderVerse}
+                    keyExtractor={item => item.ID.toString()}
+                    extraData={{ selectedVerse, highlightedVerses }}
+                    contentContainerStyle={{
+                    paddingHorizontal: 0,
+                    paddingBottom: 80 + safeBottom, // Add extra padding for the bottom bar
+                    }}
+                    showsVerticalScrollIndicator={false}
+                    ListFooterComponent={() => {
+                        const hasPrev = currentBook && (currentBook.SN > 1 || currentChapter > 1);
+                        const hasNext = currentBook && (currentBook.SN < 66 || currentChapter < currentBook.ChapterNumber);
+                        
+                        return (
+                            <View className="px-4 pt-6 pb-12">
+                            <View className="flex-row justify-between bg-white/95 dark:bg-gray-900/95 border border-gray-200 dark:border-gray-700 rounded-2xl px-4 py-3 shadow-sm">
+                                <TouchableOpacity
+                                onPress={handlePrevChapter}
+                                disabled={!hasPrev}
+                                className="flex-row items-center"
+                                >
+                                <IconSymbol name="chevron.left" size={18} color={hasPrev ? "#2563eb" : "#9ca3af"} />
+                                <Text className={`ml-1 font-semibold ${hasPrev ? 'text-blue-600' : 'text-gray-400'}`}>上一章</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                onPress={handleNextChapter}
+                                disabled={!hasNext}
+                                className="flex-row items-center"
+                                >
+                                <Text className={`mr-1 font-semibold ${hasNext ? 'text-blue-600' : 'text-gray-400'}`}>下一章</Text>
+                                <IconSymbol name="chevron.right" size={18} color={hasNext ? "#2563eb" : "#9ca3af"} />
+                                </TouchableOpacity>
+                            </View>
+                            </View>
+                        );
+                    }}
+                    onScrollToIndexFailed={({ index, averageItemLength }) => {
+                        if (averageItemLength) {
+                            flatListRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: true });
+                        }
+                    }}
+                />
+            </View>
+          </GestureDetector>
         )}
       </View>
 
@@ -667,9 +760,9 @@ export default function BibleScreen() {
               </TouchableOpacity>
               <TouchableOpacity
                 className="px-3 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30"
-                onPress={handleAdjustFont}
+                onPress={() => setSettingsVisible(true)}
               >
-                <Text className="text-base font-bold text-blue-600 dark:text-blue-300">A+</Text>
+                <IconSymbol name="textformat.size" size={20} color={isDark ? '#e2e8f0' : '#475569'} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -677,6 +770,13 @@ export default function BibleScreen() {
                 onPress={() => setShowHistoryModal(true)}
               >
                 <IconSymbol name="clock.fill" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                className="px-3 py-2 rounded-full bg-gray-100 dark:bg-gray-800"
+                onPress={() => setShowSearchModal(true)}
+              >
+                <IconSymbol name="magnifyingglass" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
               </TouchableOpacity>
             </View>
           </View>
@@ -957,6 +1057,112 @@ export default function BibleScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* Reading Settings Modal */}
+      <Modal
+          visible={settingsVisible}
+          transparent={true}
+          animationType="slide"
+          onRequestClose={() => setSettingsVisible(false)}
+      >
+          <View className="flex-1 justify-end">
+              <TouchableOpacity 
+                  className="absolute inset-0" 
+                  activeOpacity={1} 
+                  onPress={() => setSettingsVisible(false)}
+              />
+              <View className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 pb-10">
+                  <View className="flex-row justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-800 pb-2">
+                      <Text className="text-lg font-bold text-slate-900 dark:text-white">阅读设置</Text>
+                      <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                          <IconSymbol name="xmark.circle.fill" size={24} color="#94a3b8" />
+                      </TouchableOpacity>
+                  </View>
+                  
+                  <View className="flex-row items-center justify-between mb-4">
+                      <Text className="text-base text-slate-700 dark:text-slate-300 font-medium">字体大小</Text>
+                      <Text className="text-slate-500 dark:text-slate-400">{(fontScale * 100).toFixed(0)}%</Text>
+                  </View>
+                  
+                  <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+                      <TouchableOpacity 
+                          onPress={() => setFontScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10))}
+                          className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                      >
+                          <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
+                      </TouchableOpacity>
+                      
+                      <View className="flex-1 items-center">
+                           <Text className="text-slate-900 dark:text-white font-serif" style={{ fontSize: 18 * fontScale }}>预览 Text</Text>
+                      </View>
+
+                      <TouchableOpacity 
+                          onPress={() => setFontScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10))}
+                          className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                      >
+                          <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
+                      </TouchableOpacity>
+                  </View>
+              </View>
+          </View>
+      </Modal>
+
+      {/* Search Modal */}
+      <Modal
+        visible={showSearchModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowSearchModal(false)}
+      >
+        <View className="flex-1 bg-white dark:bg-black p-4">
+             <View className="flex-row items-center gap-2 mb-4 mt-2">
+                <View className="flex-1 flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2">
+                    <IconSymbol name="magnifyingglass" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    <TextInput
+                        className="flex-1 ml-2 text-base text-gray-900 dark:text-gray-100 py-1"
+                        placeholder="搜索经文..."
+                        placeholderTextColor={isDark ? '#6b7280' : '#9ca3af'}
+                        value={searchQuery}
+                        onChangeText={(text) => {
+                          setSearchQuery(text);
+                          setHasSearched(false);
+                        }}
+                        onSubmitEditing={performSearch}
+                        returnKeyType="search"
+                        autoFocus
+                        clearButtonMode="while-editing"
+                    />
+                     {searchQuery.length > 0 && Platform.OS !== 'ios' && (
+                        <TouchableOpacity onPress={() => {
+                            setSearchQuery('');
+                            setHasSearched(false);
+                        }}>
+                             <IconSymbol name="xmark.circle.fill" size={16} color={isDark ? '#6b7280' :'#9ca3af'} />
+                        </TouchableOpacity>
+                     )}
+                </View>
+                <TouchableOpacity onPress={() => setShowSearchModal(false)}>
+                    <Text className="text-blue-600 font-bold text-lg">取消</Text>
+                </TouchableOpacity>
+             </View>
+             
+             {isSearching ? (
+                 <ActivityIndicator size="large" color="#2563eb" className="mt-10" />
+             ) : (
+                <FlatList
+                    data={searchResults}
+                    keyExtractor={item => `${item.VolumeSN}-${item.ChapterSN}-${item.VerseSN}`}
+                    renderItem={renderSearchResult}
+                    ListEmptyComponent={
+                        searchQuery.length > 0 && !isSearching && hasSearched ? (
+                            <Text className="text-center text-gray-500 mt-10">未找到相关经文</Text>
+                        ) : null
+                    }
+                    keyboardShouldPersistTaps="handled" 
+                />
+             )}
+        </View>
+      </Modal>
     </View>
   );
 }

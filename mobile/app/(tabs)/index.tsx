@@ -114,6 +114,10 @@ export default function HomeScreen() {
       // Filter by Category
       if (categoryId) {
         if (post.categoryId !== Number(categoryId)) return false;
+      } else {
+        // If no category filter (Home view), check showOnHomepage
+        // If showOnHomepage is explicitly false, hide it
+        if (post.showOnHomepage === false) return false;
       }
       return true;
     });
@@ -171,7 +175,7 @@ export default function HomeScreen() {
         </View>
 
         <Text className={`text-lg font-bold mb-2 leading-tight ${isRead ? 'text-slate-600 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>{item.title}</Text>
-        <Text className="text-slate-600 dark:text-slate-400 text-sm mb-3 leading-relaxed" numberOfLines={2}>{item.excerpt}</Text>
+        <Text className="text-slate-600 dark:text-slate-400 text-sm mb-3 leading-relaxed" numberOfLines={10}>{item.excerpt}</Text>
         
         {/* Tags */}
         {item.tags && item.tags.length > 0 && (
@@ -206,8 +210,12 @@ export default function HomeScreen() {
     >
       <View className="items-center mb-2 px-4">
         <Link href="/about" asChild>
-          <TouchableOpacity>
+          <TouchableOpacity className="items-center">
             <Text className="text-2xl font-bold text-slate-900 dark:text-white font-serif tracking-tight">访问古道</Text>
+            <View className="flex-row items-center mt-1 opacity-60">
+                <Text className="text-xs text-slate-500 dark:text-slate-400">点击了解我们</Text>
+                <IconSymbol name="chevron.right" size={10} color={isDark ? '#94a3b8' : '#64748b'} />
+            </View>
           </TouchableOpacity>
         </Link>
       </View>
@@ -240,11 +248,11 @@ export default function HomeScreen() {
                     </View>
                 ) : null}
 
-                <View className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent p-4 pt-12">
-                  <Text className="text-white font-bold text-lg mb-1 leading-tight" numberOfLines={1}>
+                <View className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pt-16">
+                  <Text className="text-white font-bold text-lg mb-1 leading-tight" numberOfLines={2}>
                     {featuredPosts[carouselIndex].title}
                   </Text>
-                  <Text className="text-slate-200 text-xs font-medium" numberOfLines={1}>
+                  <Text className="text-slate-200 text-xs font-medium leading-relaxed" numberOfLines={6}>
                     {featuredPosts[carouselIndex].excerpt}
                   </Text>
                 </View>

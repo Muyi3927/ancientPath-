@@ -1,6 +1,6 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from 'react-native-render-html';
 import { marked } from 'marked';
@@ -9,6 +9,8 @@ import { BlogPost, Category } from '../../types';
 import AudioPlayer from '../../components/AudioPlayer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { markPostAsRead, saveReadingProgress, getReadingProgress } from '../../services/readingHistory';
+import ImageView from "react-native-image-viewing";
+import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 
 const HYMN_FIXED_COVER = "https://media.ancientpath.dpdns.org/images/Hymns/hymncover.webp";
 
@@ -29,8 +31,19 @@ export default function PostDetailScreen() {
   const isDark = colorScheme === 'dark';
   
   const [fontSizeScale, setFontSizeScale] = useState(1.0);
+  
   const [tocVisible, setTocVisible] = useState(false);
+  const [settingsVisible, setSettingsVisible] = useState(false);
   const [toc, setToc] = useState<{text: string, level: number, key: string}[]>([]);
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [imageUrls, setImageUrls] = useState<string[]>([]);
+  const [originalImageUrls, setOriginalImageUrls] = useState<string[]>([]); // Immutable original URLs for indexing
+  
+  const viewerImages = useMemo(() => imageUrls.map(uri => ({ uri })), [imageUrls]);
+  
+  const [viewerIndex, setViewerIndex] = useState(0);
+  const [viewerVisible, setViewerVisible] = useState(false);
+  const [controlsVisible, setControlsVisible] = useState(true); // Control footer visibility
   
   const scrollViewRef = useRef<ScrollView>(null);
   const headerPositionsRef = useRef<{[index: number]: number}>({});
@@ -68,12 +81,57 @@ export default function PostDetailScreen() {
             </View>
         );
     };
+
+    const ImageRenderer = ({ tnode }: any) => {
+        const src = tnode.attributes.src;
+        // 使用自适应高度组件，避免左右留白
+        const [aspectRatio, setAspectRatio] = useState(16 / 9); // 默认比例
+
+        // Find index of this image to open viewer correctly
+        const index = originalImageUrls.indexOf(src);
+
+        return (
+            <TouchableOpacity 
+                onPress={() => {
+                   // If found in gallery, open at index; otherwise fallback to single image view
+                   if (index !== -1) {
+                       setViewerIndex(index);
+                       setViewerVisible(true);
+                       setControlsVisible(true);
+                   } else {
+                       console.warn("Image found in render but not in extracted list:", src);
+                   }
+                }} 
+                activeOpacity={0.9} 
+                className="my-4 relative"
+            >
+                <Image 
+                    source={{ uri: src }}
+                    style={{ width: '100%', aspectRatio: aspectRatio, borderRadius: 8, backgroundColor: isDark ? '#1f2937' : '#f3f4f6' }}
+                    contentFit="contain"
+                    transition={500}
+                    onLoad={(e) => {
+                        const { width, height } = e.source;
+                        if (width && height) {
+                            setAspectRatio(width / height);
+                        }
+                    }}
+                />
+                <View className="absolute top-2 left-2 bg-black/50 px-3 py-1.5 rounded-full flex-row items-center backdrop-blur-sm">
+                    <IconSymbol name="magnifyingglass" size={12} color="white" />
+                    <Text className="text-white text-xs ml-1.5 font-medium">点击图片查看大图</Text>
+                </View>
+            </TouchableOpacity>
+        );
+    };
+
     return {
         h1: HeadingRenderer,
         h2: HeadingRenderer,
-        h3: HeadingRenderer
+        h3: HeadingRenderer,
+        img: ImageRenderer
     };
-  }, [toc]);
+  }, [toc, isDark, originalImageUrls]);
 
   // Define Stack.Screen here to ensure title is set even during loading
   const stackScreen = (
@@ -90,8 +148,8 @@ export default function PostDetailScreen() {
           },
           headerRight: () => (
             <View className="flex-row">
-                <TouchableOpacity onPress={() => setFontSizeScale(s => s >= 1.4 ? 1.0 : s + 0.2)} className="mr-4">
-                    <Text className="text-blue-600 font-bold text-lg">A{fontSizeScale > 1 ? '+' : ''}</Text>
+                <TouchableOpacity onPress={() => setSettingsVisible(true)} className="mr-4">
+                    <IconSymbol name="textformat.size" size={24} color={isDark ? '#fff' : '#000'} />
                 </TouchableOpacity>
             </View>
           )
@@ -136,6 +194,22 @@ export default function PostDetailScreen() {
     }
   }, [id]);
 
+  // Extract images from HTML content
+  useEffect(() => {
+    if (post?.content) {
+      const html = marked.parse(post.content);
+      const invalidHtml = typeof html === 'string' ? html : '';
+      const regex = /<img[^>]+src=["']([^"']+)["']/g;
+      const matches = [];
+      let match;
+      while ((match = regex.exec(invalidHtml)) !== null) {
+        matches.push(match[1]);
+      }
+      setImageUrls(matches);
+      setOriginalImageUrls(matches);
+    }
+  }, [post?.content]);
+
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (id) {
         const y = event.nativeEvent.contentOffset.y;
@@ -154,6 +228,44 @@ export default function PostDetailScreen() {
         }, 100);
     }
   }, [loading, initialScrollY]);
+
+  const handleRotateRight = async () => {
+    const currentUrl = imageUrls[viewerIndex];
+    if (!currentUrl) return;
+    
+    try {
+      const result = await manipulateAsync(
+        currentUrl,
+        [{ rotate: 90 }],
+        { format: SaveFormat.PNG }
+      );
+      
+      const newUrls = [...imageUrls];
+      newUrls[viewerIndex] = result.uri;
+      setImageUrls(newUrls);
+    } catch (error) {
+      console.error("Rotate error:", error);
+    }
+  };
+
+  const handleRotateLeft = async () => {
+    const currentUrl = imageUrls[viewerIndex];
+    if (!currentUrl) return;
+    
+    try {
+      const result = await manipulateAsync(
+        currentUrl,
+        [{ rotate: -90 }],
+        { format: SaveFormat.PNG }
+      );
+      
+      const newUrls = [...imageUrls];
+      newUrls[viewerIndex] = result.uri;
+      setImageUrls(newUrls);
+    } catch (error) {
+      console.error("Rotate error:", error);
+    }
+  };
 
   if (loading) {
     return (
@@ -188,6 +300,13 @@ export default function PostDetailScreen() {
       fontSize: baseFontSize, 
       lineHeight: lineHeight 
     },
+    div: {
+      marginTop: 8,
+      marginBottom: 8,
+    },
+    span: {
+      // Inline styles like color will be applied automatically
+    },
     h1: { 
       color: isDark ? '#f3f4f6' : '#111827', 
       fontSize: baseFontSize * 1.5, 
@@ -204,14 +323,6 @@ export default function PostDetailScreen() {
       fontWeight: 'bold', 
       lineHeight: lineHeight * 1.2 
     },
-    strong: {
-        fontWeight: 'bold',
-        color: isDark ? '#fff' : '#000',
-    },
-    b: {
-        fontWeight: 'bold',
-        color: isDark ? '#fff' : '#000',
-    },
     h3: { 
       color: isDark ? '#e5e7eb' : '#374151', 
       fontSize: baseFontSize * 1.1, 
@@ -220,11 +331,39 @@ export default function PostDetailScreen() {
       fontWeight: 'bold', 
       lineHeight: lineHeight * 1.1 
     },
+    h4: {
+      color: isDark ? '#e5e7eb' : '#374151', 
+      fontSize: baseFontSize * 1.05, 
+      marginTop: 14, 
+      marginBottom: 6, 
+      fontWeight: 'bold', 
+    },
     p: { 
+      marginTop: 0,
       marginBottom: 16, 
       fontSize: baseFontSize, 
       lineHeight: lineHeight, 
       color: isDark ? '#e5e7eb' : '#374151' 
+    },
+    strong: {
+        fontWeight: 'bold',
+        color: isDark ? '#fff' : '#000',
+    },
+    b: {
+        fontWeight: 'bold',
+        color: isDark ? '#fff' : '#000',
+    },
+    em: {
+        fontStyle: 'italic',
+    },
+    i: {
+        fontStyle: 'italic',
+    },
+    u: {
+        textDecorationLine: 'underline',
+    },
+    s: {
+        textDecorationLine: 'line-through',
     },
     blockquote: { 
       backgroundColor: isDark ? '#1f2937' : '#f9fafb', 
@@ -233,7 +372,7 @@ export default function PostDetailScreen() {
       paddingHorizontal: 16,
       paddingVertical: 12,
       marginVertical: 16,
-      fontStyle: 'italic',
+      fontStyle: 'normal',
       color: isDark ? '#9ca3af' : '#4b5563'
     },
     code: { 
@@ -241,24 +380,46 @@ export default function PostDetailScreen() {
       paddingHorizontal: 6, 
       paddingVertical: 2, 
       borderRadius: 4, 
-      fontFamily: 'monospace',
-      color: isDark ? '#e5e7eb' : '#1f2937'
+      fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+      fontSize: baseFontSize * 0.85,
+      color: isDark ? '#e5e7eb' : '#ef4444' // Red color for better visibility usually
     },
     pre: {
       backgroundColor: isDark ? '#111827' : '#1f2937',
       padding: 16,
       borderRadius: 8,
-      overflow: 'scroll',
+      marginVertical: 16,
     },
     mark: {
-        backgroundColor: '#fef08a', // yellow-200
+        backgroundColor: '#fef9c3', // yellow-100
         color: '#854d0e', // yellow-800
-        paddingHorizontal: 4,
-        borderRadius: 4,
+        paddingHorizontal: 2,
+        borderRadius: 2,
     },
     small: {
         fontSize: baseFontSize * 0.8,
         color: isDark ? '#9ca3af' : '#6b7280',
+    },
+    ul: {
+        marginBottom: 16,
+        paddingLeft: 20,
+    },
+    ol: {
+        marginBottom: 16,
+        paddingLeft: 20,
+    },
+    li: {
+        marginBottom: 4,
+    },
+    a: {
+        color: '#2563eb',
+        textDecorationLine: 'underline',
+    },
+    hr: {
+        marginTop: 16,
+        marginBottom: 16,
+        height: 1,
+        backgroundColor: isDark ? '#374151' : '#e5e7eb',
     }
   };
 
@@ -338,6 +499,9 @@ export default function PostDetailScreen() {
                 renderers={renderers}
                 customHTMLElementModels={customHTMLElementModels}
                 defaultTextProps={{ selectable: true }}
+                enableCSSInlineProcessing={true}
+                enableExperimentalMarginCollapsing={true}
+                systemFonts={[Platform.OS === 'ios' ? 'San Francisco' : 'Roboto', 'monospace', 'serif']}
                 />
             </View>
         </ScrollView>
@@ -392,6 +556,106 @@ export default function PostDetailScreen() {
                 </View>
             </View>
         </Modal>
+
+        {/* Settings Modal */}
+        <Modal
+            visible={settingsVisible}
+            transparent={true}
+            animationType="slide"
+            onRequestClose={() => setSettingsVisible(false)}
+        >
+            <View className="flex-1 justify-end">
+                <TouchableOpacity 
+                    className="absolute inset-0" 
+                    activeOpacity={1} 
+                    onPress={() => setSettingsVisible(false)}
+                />
+                <View className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 pb-10">
+                    <View className="flex-row justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-800 pb-2">
+                        <Text className="text-lg font-bold text-slate-900 dark:text-white">阅读设置</Text>
+                        <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                            <IconSymbol name="xmark.circle.fill" size={24} color="#94a3b8" />
+                        </TouchableOpacity>
+                    </View>
+                    
+                    <View className="flex-row items-center justify-between mb-4">
+                        <Text className="text-base text-slate-700 dark:text-slate-300 font-medium">字体大小</Text>
+                        <Text className="text-slate-500 dark:text-slate-400">{(fontSizeScale * 100).toFixed(0)}%</Text>
+                    </View>
+                    
+                    <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
+                        <TouchableOpacity 
+                            onPress={() => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10))}
+                            className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                        >
+                            <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
+                        </TouchableOpacity>
+                        
+                        <View className="flex-1 items-center">
+                             <Text className="text-slate-900 dark:text-white font-serif" style={{ fontSize: 18 * fontSizeScale }}>预览 Text</Text>
+                        </View>
+                        <TouchableOpacity 
+                            onPress={() => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10))}
+                            className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                        >
+                            <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+
+        {/* Full Screen Image Modal */}
+        <ImageView
+            images={viewerImages}
+            imageIndex={viewerIndex}
+            visible={viewerVisible}
+            onRequestClose={() => setViewerVisible(false)}
+            onImageIndexChange={setViewerIndex}
+            swipeToCloseEnabled={true}
+            doubleTapToZoomEnabled={true}
+            // @ts-ignore
+            ImageComponent={(props: any) => <Image {...props} transition={0} />}
+            HeaderComponent={({ imageIndex }) => (
+                <View 
+                    style={{ opacity: controlsVisible ? 1 : 0 }}
+                    className="w-full flex-row justify-end pt-14 px-6 absolute top-0 z-50 transition-opacity duration-300"
+                >
+                    <TouchableOpacity 
+                        className="p-3 bg-black/40 rounded-full backdrop-blur-md"
+                        onPress={() => setViewerVisible(false)}
+                    >
+                        <IconSymbol name="xmark" size={20} color="white" />
+                    </TouchableOpacity>
+                </View>
+            )}
+            FooterComponent={({ imageIndex }) => (
+                <View 
+                    style={{ opacity: controlsVisible ? 1 : 0 }} 
+                    className="pb-12 transition-opacity duration-300 items-center justify-end"
+                >
+                    <Text className="text-white/90 text-sm mb-8 font-medium bg-black/40 px-5 py-2 rounded-full overflow-hidden backdrop-blur-md border border-white/10">
+                        双指缩放 • 长按显隐菜单 • 左右滑动切换
+                    </Text>
+                    <View className="flex-row justify-center gap-8" pointerEvents={controlsVisible ? "auto" : "none"}>
+                        <TouchableOpacity 
+                            className="p-5 bg-black/50 rounded-full backdrop-blur-md active:bg-black/70"
+                            onPress={handleRotateLeft}
+                        >
+                            <IconSymbol name="rotate.left" size={28} color="white" />
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            className="p-5 bg-black/50 rounded-full backdrop-blur-md active:bg-black/70"
+                            onPress={handleRotateRight}
+                        >
+                            <IconSymbol name="rotate.right" size={28} color="white" />
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            )}
+
+            onLongPress={() => setControlsVisible(!controlsVisible)}
+        />
       </View>
     </>
   );

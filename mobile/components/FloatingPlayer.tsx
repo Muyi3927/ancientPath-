@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, Platform, Animated, PanResponder, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { useRouter } from 'expo-router';
+import { useRouter, usePathname } from 'expo-router';
 import { useAudio } from '../context/AudioContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import MusicNoteIcon from '@/components/ui/MusicNoteIcon';
@@ -9,6 +9,7 @@ import MusicNoteIcon from '@/components/ui/MusicNoteIcon';
 export default function FloatingPlayer() {
   const { currentTrack, isPlaying, togglePlay, closePlayer } = useAudio();
   const router = useRouter();
+  const pathname = usePathname();
   const [isExpanded, setIsExpanded] = useState(false);
   const widthAnim = useRef(new Animated.Value(50)).current; // Start collapsed (width 50)
   const opacityAnim = useRef(new Animated.Value(0)).current; // Content opacity
@@ -81,7 +82,7 @@ export default function FloatingPlayer() {
   );
 
   // Auto-collapse timer
-  const collapseTimer = useRef<NodeJS.Timeout | null>(null);
+  const collapseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (isPlaying) {
@@ -89,15 +90,20 @@ export default function FloatingPlayer() {
     } else {
       stopRotation();
     }
+    
+    // Reset collapse timer when play state changes if expanded
+    if (isExpanded) {
+      resetCollapseTimer();
+    }
   }, [isPlaying]);
 
   useEffect(() => {
-    if (currentTrack) {
-        // Reset to collapsed state when track changes, or keep current state?
-        // Let's keep it collapsed by default or respect user interaction.
-        // But if it's a new track, maybe show it briefly?
-        // For now, let's just ensure it's visible.
-    }
+    // Reset to collapsed state whenever track changes to ensure it starts collapsed
+    // This handles the "default collapsed" requirement and prevents it from appearing expanded
+    setIsExpanded(false);
+    widthAnim.setValue(50);
+    opacityAnim.setValue(0);
+    if (collapseTimer.current) clearTimeout(collapseTimer.current);
   }, [currentTrack]);
 
   const startRotation = () => {
@@ -153,17 +159,23 @@ export default function FloatingPlayer() {
 
   const resetCollapseTimer = () => {
     if (collapseTimer.current) clearTimeout(collapseTimer.current);
+    // Shortened times: 4s when playing, 2s when paused (as requested)
+    const timeoutDuration = isPlaying ? 2000 : 2000;
+    
     collapseTimer.current = setTimeout(() => {
       collapse();
-    }, 5000); // Auto collapse after 5 seconds of inactivity
+    }, timeoutDuration);
   };
 
   const handlePress = () => {
     if (!isExpanded) {
       expand();
     } else {
-      // If already expanded, navigate to post
-      router.push(`/post/${currentTrack?.postId}`);
+      // If already expanded, navigate to post if not currently on it
+      const targetPath = `/post/${currentTrack?.postId}`;
+      if (pathname !== targetPath) {
+        router.push(targetPath as any);
+      }
     }
   };
 
@@ -231,7 +243,12 @@ export default function FloatingPlayer() {
       >
         <TouchableOpacity 
             className="flex-1 mr-2" 
-            onPress={() => router.push(`/post/${currentTrack.postId}`)}
+            onPress={() => {
+                const targetPath = `/post/${currentTrack.postId}`;
+                if (pathname !== targetPath) {
+                    router.push(targetPath as any);
+                }
+            }}
         >
             <Text className="text-sm font-bold text-gray-900 dark:text-white" numberOfLines={1}>
                 {currentTrack.title}
