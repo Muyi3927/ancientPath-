@@ -213,7 +213,7 @@ export default function HomeScreen() {
           <TouchableOpacity className="items-center">
             <Text className="text-2xl font-bold text-slate-900 dark:text-white font-serif tracking-tight">访问古道</Text>
             <View className="flex-row items-center mt-1 opacity-60">
-                <Text className="text-xs text-slate-500 dark:text-slate-400">点击了解我们</Text>
+                <Text className="text-xs text-slate-500 dark:text-slate-400">关于我们</Text>
                 <IconSymbol name="chevron.right" size={10} color={isDark ? '#94a3b8' : '#64748b'} />
             </View>
           </TouchableOpacity>

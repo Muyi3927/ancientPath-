@@ -15,7 +15,7 @@ import {
   Keyboard,
   Platform,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets, SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { Colors } from '@/constants/theme';
@@ -1112,8 +1112,9 @@ export default function BibleScreen() {
         presentationStyle="pageSheet"
         onRequestClose={() => setShowSearchModal(false)}
       >
-        <View className="flex-1 bg-white dark:bg-black p-4">
-             <View className="flex-row items-center gap-2 mb-4 mt-2">
+        <SafeAreaView className="flex-1 bg-white dark:bg-black" edges={['top', 'bottom']}>
+          <View className="flex-1 px-4 pt-4">
+             <View className="flex-row items-center gap-2 mb-4">
                 <View className="flex-1 flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-lg px-3 py-2">
                     <IconSymbol name="magnifyingglass" size={20} color={isDark ? '#9ca3af' : '#6b7280'} />
                     <TextInput
@@ -1159,7 +1160,8 @@ export default function BibleScreen() {
                     keyboardShouldPersistTaps="handled" 
                 />
              )}
-        </View>
+          </View>
+        </SafeAreaView>
       </Modal>
     </View>
   );
