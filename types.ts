@@ -29,6 +29,7 @@ export interface BlogPost {
   tags: string[];
   views: number;
   isFeatured?: boolean;
+  showOnHomepage?: boolean;
   audioUrl?: string; // New field for sermon audio
 }
 

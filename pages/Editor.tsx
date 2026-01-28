@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
-import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus } from 'lucide-react';
+import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus, AlignLeft, AlignCenter, AlignRight, Home } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
 import { generateSummary } from '../services/aiService';
@@ -46,6 +46,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [coverImage, setCoverImage] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
+  const [showOnHomepage, setShowOnHomepage] = useState(true);
   const [isMetaCollapsed, setIsMetaCollapsed] = useState(false);
 
   const [previewMode, setPreviewMode] = useState(false);
@@ -111,6 +112,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
         setCurrentTags(post.tags);
         setCoverImage(post.coverImage);
         setIsFeatured(post.isFeatured || false);
+        setShowOnHomepage(post.showOnHomepage !== false);
         setAudioUrl(post.audioUrl || '');
       }
     } else {
@@ -322,6 +324,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
           coverImage,
           audioUrl,
           isFeatured,
+          showOnHomepage,
           timestamp: Date.now()
       };
       
@@ -353,6 +356,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       categoryId: categoryId,
       tags: currentTags,
       isFeatured,
+      showOnHomepage,
       audioUrl
     };
 
@@ -439,6 +443,13 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                         onChange={e => setTitle(e.target.value)}
                         className="flex-grow bg-transparent text-2xl font-serif font-bold focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
                     />
+                    <button 
+                        onClick={() => setShowOnHomepage(!showOnHomepage)}
+                        className={`p-2 rounded-full transition-all ${showOnHomepage ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
+                        title={showOnHomepage ? "从首页隐藏" : "显示在首页"}
+                    >
+                        <Home className={`w-5 h-5 ${showOnHomepage ? 'fill-current' : ''}`} />
+                    </button>
                     <button 
                         onClick={() => setIsFeatured(!isFeatured)}
                         className={`p-2 rounded-full transition-all ${isFeatured ? 'bg-yellow-100 text-yellow-500' : 'bg-slate-100 text-slate-400'}`}
@@ -725,6 +736,16 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                     </button>
                     <button onClick={() => insertMarkdown('\n---\n')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="分割线">
                         <Minus className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    <button onClick={() => insertMarkdown('<div style="text-align: left">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="左对齐">
+                        <AlignLeft className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<div style="text-align: center">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="居中对齐">
+                        <AlignCenter className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<div style="text-align: right">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="右对齐">
+                        <AlignRight className="w-4 h-4" />
                     </button>
                     <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
                     

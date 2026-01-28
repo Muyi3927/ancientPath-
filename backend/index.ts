@@ -132,6 +132,7 @@ app.get('/api/posts', async (c) => {
       categoryId: p.categoryId ? String(p.categoryId) : null,
       tags: p.tags ? JSON.parse(p.tags) : [],
       isFeatured: Boolean(p.isFeatured),
+      showOnHomepage: p.showOnHomepage !== 0,
       author: { username: p.authorName || 'Admin', role: 'ADMIN' } 
     }));
     
@@ -154,6 +155,7 @@ app.get('/api/posts/:id', async (c) => {
       ...post,
       tags: post.tags ? JSON.parse(post.tags as string) : [],
       isFeatured: Boolean(post.isFeatured),
+      showOnHomepage: post.showOnHomepage !== 0,
       author: { username: post.authorName || 'Admin', role: 'ADMIN' }
     };
     
@@ -170,7 +172,7 @@ app.post('/api/posts', async (c: any) => {
   try {
     const body = await c.req.json();
     // 前端传来的 ID 可能是新文章的 UUID (如果前端生成) 或旧文章的数字 ID
-    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author } = body;
+    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author, showOnHomepage } = body;
     
     const now = Date.now();
     // --- 检查文章是否存在 ---
@@ -188,12 +190,13 @@ app.post('/api/posts', async (c: any) => {
         // tags comes as array from body, but stored as string in DB. existing.tags is string.
         const newTags = tags !== undefined ? JSON.stringify(tags) : existing.tags;
         const newIsFeatured = isFeatured !== undefined ? (isFeatured ? 1 : 0) : existing.isFeatured;
+        const newShowOnHomepage = showOnHomepage !== undefined ? (showOnHomepage ? 1 : 0) : (existing.showOnHomepage !== undefined ? existing.showOnHomepage : 1);
         const newAudioUrl = audioUrl ?? existing.audioUrl;
 
         await c.env.DB.prepare(`
-            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, audioUrl=?
+            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, showOnHomepage=?, audioUrl=?
             WHERE id=?
-        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newAudioUrl, id).run();
+        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newShowOnHomepage, newAudioUrl, id).run();
         
         return c.json({ success: true, id: id });
 
@@ -201,9 +204,9 @@ app.post('/api/posts', async (c: any) => {
         // --- 插入新文章 (让数据库自动生成自增 ID) ---
         const tagString = JSON.stringify(tags || []);
         const result = await c.env.DB.prepare(`
-            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, audioUrl, authorName)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, audioUrl, author?.username || 'Admin').run();
+            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, showOnHomepage, audioUrl, authorName)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, showOnHomepage !== false ? 1 : 0, audioUrl, author?.username || 'Admin').run();
 
         const newId = result.meta.last_row_id;
         

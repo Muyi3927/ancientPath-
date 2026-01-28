@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { getBooks, getVerses, BibleBook, BibleVerse, searchVerses, BibleVersion } from '../services/BibleService';
-import { Book, Search, ChevronLeft, ChevronRight, Menu, X, Type } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
 import { LayoutContext } from '../App';
 
 export const Bible: React.FC = () => {
@@ -15,10 +15,16 @@ export const Bible: React.FC = () => {
   const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [version, setVersion] = useState<BibleVersion>('cuv');
-  const [fontSize, setFontSize] = useState(18);
+  // Default font size scale increased to 1.2
+  const [fontSizeScale, setFontSizeScale] = useState(1.2);
+
+  // Font Helpers
+  const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
+  const increaseFont = () => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10));
   
   // Mobile Modal States
   const [showBookModal, setShowBookModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [bookTab, setBookTab] = useState<'old' | 'new'>('old');
   const [modalView, setModalView] = useState<'books' | 'chapters'>('books');
   const versesContainerRef = useRef<HTMLDivElement>(null);
@@ -226,13 +232,30 @@ export const Bible: React.FC = () => {
           </div>
           
           <div className="flex items-center space-x-2 flex-shrink-0">
-            <button
-              onClick={() => setFontSize(s => s >= 26 ? 16 : s + 2)}
-              className="p-1.5 md:p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300 mr-1"
-              title="调整字体大小"
+            {/* Mobile Search Button */}
+            <button 
+                onClick={() => setShowSearchModal(true)}
+                className="md:hidden p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300"
             >
-              <Type className="w-5 h-5" />
+                <Search className="w-5 h-5" />
             </button>
+
+            {/* Font Size Control */}
+            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 border border-gray-200 dark:border-gray-700 mr-2">
+                 <button 
+                    onClick={decreaseFont} 
+                    className="p-1.5 w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-full transition-colors"
+                 >
+                    <span className="font-bold text-xs text-gray-600 dark:text-gray-300">A-</span>
+                 </button>
+                 <span className="text-[10px] font-mono w-8 text-center text-gray-500 dark:text-gray-400">{(fontSizeScale * 100).toFixed(0)}%</span>
+                 <button 
+                    onClick={increaseFont} 
+                    className="p-1.5 w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-full transition-colors"
+                 >
+                    <span className="font-bold text-sm text-gray-600 dark:text-gray-300">A+</span>
+                 </button>
+            </div>
 
             <select
                 value={version}
@@ -283,13 +306,13 @@ export const Bible: React.FC = () => {
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : (
-            <div className="max-w-3xl mx-auto space-y-4 pb-20">
+            <div className="max-w-3xl mx-auto space-y-1 pb-20">
               {verses.map(verse => (
-                <div key={verse.ID} className="flex group hover:bg-gray-50 dark:hover:bg-gray-800/50 p-2 rounded-lg transition-colors">
-                  <span className="text-xs text-gray-400 w-6 md:w-8 pt-1.5 select-none flex-shrink-0">{verse.VerseSN}</span>
+                <div key={verse.ID} className="flex group hover:bg-gray-50 dark:hover:bg-gray-800/50 p-1 px-2 rounded-lg transition-colors">
+                  <span className="text-xs text-gray-400 w-6 md:w-8 pt-2 select-none flex-shrink-0">{verse.VerseSN}</span>
                   <p 
                     className="text-gray-800 dark:text-gray-200 leading-relaxed font-serif flex-1 transition-all duration-200"
-                    style={{ fontSize: `${fontSize}px`, lineHeight: '1.6' }}
+                    style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}
                   >
                     {verse.Lection}
                   </p>
@@ -410,6 +433,74 @@ export const Bible: React.FC = () => {
                     </div>
                 </div>
             )}
+        </div>
+      )}
+
+      {/* Mobile Search Modal */}
+      {showSearchModal && (
+        <div className="md:hidden fixed inset-0 z-50 bg-white dark:bg-gray-900 flex flex-col">
+            <div className="h-14 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-4">
+                <h2 className="text-lg font-bold dark:text-white">搜索经文</h2>
+                <button onClick={() => setShowSearchModal(false)} className="p-2">
+                    <X className="w-6 h-6 text-gray-500" />
+                </button>
+            </div>
+            
+            <div className="p-4 border-b border-gray-200 dark:border-gray-800">
+                <form onSubmit={(e) => {
+                    handleSearch(e);
+                    // Keep modal open to show results
+                }} className="relative">
+                    <input
+                        type="text"
+                        placeholder="输入关键词..."
+                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        autoFocus
+                    />
+                    <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                </form>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+                {isSearching ? (
+                   <div className="flex justify-center py-10">
+                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                   </div>
+                ) : searchResults.length > 0 ? (
+                    <div className="space-y-3">
+                        <div className="px-1 text-xs font-semibold text-gray-500 uppercase">找到 {searchResults.length} 条结果</div>
+                        {searchResults.map(verse => {
+                            const book = books.find(b => b.SN === verse.VolumeSN);
+                            return (
+                                <button
+                                    key={verse.ID}
+                                    onClick={() => {
+                                        if (book) {
+                                            setCurrentBook(book);
+                                            setCurrentChapter(verse.ChapterSN);
+                                            setSearchResults([]);
+                                            setShowSearchModal(false);
+                                        }
+                                    }}
+                                    className="w-full text-left p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800"
+                                >
+                                    <div className="flex items-center justify-between mb-1">
+                                        <span className="font-bold text-blue-600 dark:text-blue-400">{book?.ShortName} {verse.ChapterSN}:{verse.VerseSN}</span>
+                                    </div>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm line-clamp-2">{verse.Lection}</p>
+                                </button>
+                            )
+                        })}
+                    </div>
+                ) : (
+                    <div className="flex flex-col items-center justify-center h-40 text-gray-400">
+                        <Search className="w-12 h-12 mb-2 opacity-20" />
+                        <p>输入经文或关键词搜索</p>
+                    </div>
+                )}
+            </div>
         </div>
       )}
     </div>

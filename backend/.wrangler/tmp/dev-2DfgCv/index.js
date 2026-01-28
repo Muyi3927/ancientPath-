@@ -1,7 +1,7 @@
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
 
-// .wrangler/tmp/bundle-aZh99R/checked-fetch.js
+// .wrangler/tmp/bundle-9vEuC8/checked-fetch.js
 var urls = /* @__PURE__ */ new Set();
 function checkURL(request, init) {
   const url = request instanceof URL ? request : new URL(
@@ -1735,6 +1735,7 @@ app.get("/api/posts", async (c) => {
       categoryId: p.categoryId ? String(p.categoryId) : null,
       tags: p.tags ? JSON.parse(p.tags) : [],
       isFeatured: Boolean(p.isFeatured),
+      showOnHomepage: p.showOnHomepage !== 0,
       author: { username: p.authorName || "Admin", role: "ADMIN" }
     }));
     return c.json(posts);
@@ -1752,6 +1753,7 @@ app.get("/api/posts/:id", async (c) => {
       ...post,
       tags: post.tags ? JSON.parse(post.tags) : [],
       isFeatured: Boolean(post.isFeatured),
+      showOnHomepage: post.showOnHomepage !== 0,
       author: { username: post.authorName || "Admin", role: "ADMIN" }
     };
     return c.json(formatted);
@@ -1763,7 +1765,7 @@ app.post("/api/posts", async (c) => {
   if (!checkAuth(c)) return c.json({ error: "Unauthorized" }, 401);
   try {
     const body = await c.req.json();
-    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author } = body;
+    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author, showOnHomepage } = body;
     const now = Date.now();
     const existing = id ? await c.env.DB.prepare("SELECT * FROM posts WHERE id = ?").bind(id).first() : null;
     if (existing) {
@@ -1774,18 +1776,19 @@ app.post("/api/posts", async (c) => {
       const newCategoryId = categoryId ?? existing.categoryId;
       const newTags = tags !== void 0 ? JSON.stringify(tags) : existing.tags;
       const newIsFeatured = isFeatured !== void 0 ? isFeatured ? 1 : 0 : existing.isFeatured;
+      const newShowOnHomepage = showOnHomepage !== void 0 ? showOnHomepage ? 1 : 0 : existing.showOnHomepage !== void 0 ? existing.showOnHomepage : 1;
       const newAudioUrl = audioUrl ?? existing.audioUrl;
       await c.env.DB.prepare(`
-            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, audioUrl=?
+            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, showOnHomepage=?, audioUrl=?
             WHERE id=?
-        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newAudioUrl, id).run();
+        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newShowOnHomepage, newAudioUrl, id).run();
       return c.json({ success: true, id });
     } else {
       const tagString = JSON.stringify(tags || []);
       const result = await c.env.DB.prepare(`
-            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, audioUrl, authorName)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, audioUrl, author?.username || "Admin").run();
+            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, showOnHomepage, audioUrl, authorName)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, showOnHomepage !== false ? 1 : 0, audioUrl, author?.username || "Admin").run();
       const newId = result.meta.last_row_id;
       return c.json({ success: true, id: newId });
     }
@@ -1996,7 +1999,7 @@ var drainBody = /* @__PURE__ */ __name(async (request, env, _ctx, middlewareCtx)
 }, "drainBody");
 var middleware_ensure_req_body_drained_default = drainBody;
 
-// .wrangler/tmp/bundle-aZh99R/middleware-insertion-facade.js
+// .wrangler/tmp/bundle-9vEuC8/middleware-insertion-facade.js
 var __INTERNAL_WRANGLER_MIDDLEWARE__ = [
   middleware_ensure_req_body_drained_default
 ];
@@ -2027,7 +2030,7 @@ function __facade_invoke__(request, env, ctx, dispatch, finalMiddleware) {
 }
 __name(__facade_invoke__, "__facade_invoke__");
 
-// .wrangler/tmp/bundle-aZh99R/middleware-loader.entry.ts
+// .wrangler/tmp/bundle-9vEuC8/middleware-loader.entry.ts
 var __Facade_ScheduledController__ = class ___Facade_ScheduledController__ {
   constructor(scheduledTime, cron, noRetry) {
     this.scheduledTime = scheduledTime;

@@ -125,7 +125,7 @@ export const Hymns: React.FC = () => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Subcategories */}
-        <div className="w-24 md:w-64 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
+        <div className="w-32 md:w-64 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
           <div className="p-2 pb-24 space-y-1">
             {!activeRoot && (
                 <div className="p-4 text-sm text-gray-500 text-center">

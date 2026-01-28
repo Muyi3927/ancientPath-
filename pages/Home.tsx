@@ -113,6 +113,11 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       // 排除隐藏分类
       if (excludedCategoryIds.has(Number(post.categoryId))) return false;
 
+      // 首页显示控制: 只有在没有任何筛选条件(即纯首页浏览)时，才遵循 showOnHomepage 设置
+      // 如果文章设置为不显示在首页(showOnHomepage === false)，则隐藏
+      const isDefaultHomeView = activeCategoryId === null && !tagFilter && !searchQuery;
+      if (isDefaultHomeView && post.showOnHomepage === false) return false;
+
       // 分类逻辑：包含精确匹配 OR 如果文章分类是选中分类的子分类 (递归)
       let matchesCategory = true;
       if (activeCategoryId !== null) {
@@ -222,6 +227,10 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       {/* Mobile Title */}
       <div className="md:hidden pt-2 text-center">
           <h1 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">访问古道</h1>
+          <Link to="/about" className="inline-flex items-center gap-1 mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors text-xs font-medium">
+             <span>关于我们</span>
+             <ChevronRight className="w-3 h-3" />
+          </Link>
       </div>
 
       {/* Featured Carousel Section */}
@@ -247,7 +256,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                                 <h1 className="text-xl md:text-5xl font-serif font-bold text-white mb-2 leading-tight drop-shadow-lg line-clamp-2">
                                     {post.title}
                                 </h1>
-                                <p className="text-slate-200 max-w-2xl text-xs md:text-lg line-clamp-2 drop-shadow-md hidden md:block">
+                                <p className="text-slate-200 max-w-2xl text-xs md:text-lg line-clamp-5 drop-shadow-md block">
                                     {post.excerpt}
                                 </p>
                             </div>
@@ -288,6 +297,23 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-8">
           {/* Sidebar: Categories (Order 1 on mobile to appear at top) */}
           <div className="lg:col-span-1 order-1 lg:order-1">
+              {/* Desktop About Card */}
+              <div className="hidden lg:block bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 mb-6">
+                  <div className="flex items-center gap-4 mb-4">
+                      <img src="/logo.svg" alt="logo" className="w-12 h-12 rounded-lg shadow-sm" />
+                      <div>
+                          <h3 className="font-serif font-bold text-lg text-slate-900 dark:text-white">关于访问古道</h3>
+                          <p className="text-[10px] text-slate-500 uppercase tracking-widest">Ancient Paths</p>
+                      </div>
+                  </div>
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed line-clamp-3">
+                      我们秉承欧陆改革宗体系，持守加尔文神学，相信三大普世信经和三项联合信条，坚守教会的三种职分（包括牧师、长老和执事），施行两项圣礼（即洗礼和圣餐）， 遵循基于多特法规改编的教会规章，在教导和管理上与欧陆改革宗教会一致。
+                  </p>
+                  <Link to="/about" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-bold transition-colors">
+                      了解更多 <ChevronRight className="w-4 h-4 ml-0.5" />
+                  </Link>
+              </div>
+
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sticky top-24">
                   <div 
                     className="flex items-center justify-between cursor-pointer lg:cursor-default"

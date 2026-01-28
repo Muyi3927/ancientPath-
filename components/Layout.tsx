@@ -87,9 +87,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <Link to="/app" className={`${isActive('/app') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 下载App
               </Link>
-              <Link to="/about" className={`${isActive('/about') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
-                关于我们
-              </Link>
               
               {/* Search Bar */}
               <form onSubmit={handleSearch} className="relative">
@@ -181,10 +178,6 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
         <Link to="/app" className={`flex flex-col items-center p-2 ${isActive('/app') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
           <Download className="w-6 h-6" />
           <span className="text-[10px] mt-1">下载</span>
-        </Link>
-        <Link to="/about" className={`flex flex-col items-center p-2 ${isActive('/about') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
-          <User className="w-6 h-6" />
-          <span className="text-[10px] mt-1">关于</span>
         </Link>
       </div>
     </div>

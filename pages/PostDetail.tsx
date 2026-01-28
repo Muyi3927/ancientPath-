@@ -4,7 +4,7 @@ import { format } from 'date-fns';
 import { BlogPost, Category } from '../types';
 import { AuthContext } from '../App';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { ArrowLeft, Calendar, User, Share2, Tag, Type, Minus, Plus, Volume2, Edit, Gauge, Trash2, List, X, FileDown } from 'lucide-react';
+import { ArrowLeft, Calendar, Share2, Tag, Type, Volume2, Edit, Gauge, Trash2, List, X, FileDown, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface PostDetailProps {
   posts: BlogPost[];
@@ -23,12 +23,21 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   const audioRef = useRef<HTMLAudioElement>(null);
   
   // Accessibility: Font Size State
-  const [fontSizeLevel, setFontSizeLevel] = useState(0);
-  const fontClasses = ['prose-lg', 'prose-xl', 'prose-2xl'];
+  // Default to 1.2 for better readability
+  const [fontSizeScale, setFontSizeScale] = useState(1.2);
+
+  // Helpers
+  const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
+  const increaseFont = () => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10));
 
   // TOC State
   const [showTOC, setShowTOC] = useState(false);
   const [headings, setHeadings] = useState<{id: string, text: string, level: number}[]>([]);
+
+  // Image Preview State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [imageScale, setImageScale] = useState(1);
 
   useEffect(() => {
     if (post) {
@@ -76,9 +85,6 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       }
   };
 
-  const increaseFont = () => setFontSizeLevel(prev => Math.min(prev + 1, 2));
-  const decreaseFont = () => setFontSizeLevel(prev => Math.max(prev - 1, 0));
-
   const handleDelete = async () => {
       if (post && await onDeletePost(post.id)) {
           navigate('/');
@@ -89,6 +95,12 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // 但为了保险起见，或者如果 categories 还没加载完，我们做个防御性检查。
   const categoryName = categories?.find(c => String(c.id) === String(post.categoryId))?.name || '未分类';
   
+  const handleImageClick = (src: string) => {
+    setPreviewImage(src);
+    setImageRotation(0);
+    setImageScale(1);
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-wrap gap-4 justify-between items-center mb-6 print:hidden">
@@ -125,31 +137,29 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             </button>
 
           <div className="flex items-center bg-white dark:bg-slate-800 rounded-full p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
-             <div className="px-3 flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
+             <div className="px-3 flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider hidden sm:flex">
                 <Type className="w-3 h-3" /> 字体
              </div>
              <button 
                 onClick={decreaseFont} 
-                disabled={fontSizeLevel === 0}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full disabled:opacity-30 transition-colors"
+                className="p-2 w-10 h-10 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full active:bg-slate-200 transition-colors"
                 title="减小字体"
              >
-                <Minus className="w-4 h-4" />
+                <span className="font-bold text-sm">A-</span>
              </button>
-             <span className="text-xs font-mono w-4 text-center">{fontSizeLevel + 1}</span>
+             <span className="text-xs font-mono w-12 text-center">{(fontSizeScale * 100).toFixed(0)}%</span>
              <button 
                 onClick={increaseFont} 
-                disabled={fontSizeLevel === 2}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full disabled:opacity-30 transition-colors"
+                className="p-2 w-10 h-10 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full active:bg-slate-200 transition-colors"
                 title="增大字体"
              >
-                <Plus className="w-4 h-4" />
+                <span className="font-bold text-lg">A+</span>
              </button>
           </div>
           </div>
       </div>
 
-      <article className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-100 dark:border-slate-800">
+      <article className="bg-white dark:bg-slate-900 md:rounded-3xl overflow-hidden shadow-none md:shadow-xl border-y md:border border-slate-100 dark:border-slate-800 -mx-4 md:mx-0">
         {/* Cover Image */}
         <div className="h-64 md:h-96 w-full relative">
            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
@@ -189,9 +199,12 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {post.audioUrl && (
               <div className="mb-10 bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 print:hidden">
                   <div className="flex items-center justify-between mb-3 text-primary-600 font-bold">
-                      <div className="flex items-center gap-2">
-                        <Volume2 className="w-5 h-5" /> 
-                        <span>收听音频</span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Volume2 className="w-5 h-5" /> 
+                            <span>收听音频</span>
+                        </div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-7 line-clamp-1">{post.title}</span>
                       </div>
                       
                       <div className="flex items-center gap-2">
@@ -223,11 +236,91 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {/* Post Content with dynamic font size class */}
           <MarkdownRenderer 
             content={post.content} 
-            className={`${fontClasses[fontSizeLevel]} max-w-none font-serif text-slate-700 dark:text-slate-300 leading-loose transition-all duration-200`} 
+            className={`max-w-none font-serif text-slate-700 dark:text-slate-300 leading-loose transition-all duration-200`} 
+            style={{ fontSize: `${fontSizeScale}rem` }}
+            onImageClick={handleImageClick}
           />
 
         </div>
       </article>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm"
+            onClick={() => setPreviewImage(null)}
+        >
+            {/* Top Bar */}
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-end z-20" onClick={e => e.stopPropagation()}>
+                <button 
+                    onClick={() => setPreviewImage(null)}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                >
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
+
+            {/* Image Container */}
+            <div 
+                className="flex-1 flex items-center justify-center w-full h-full p-4 pt-16 pb-28 overflow-hidden"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Close if clicking the background area (not the image itself)
+                  if (e.target === e.currentTarget) {
+                    setPreviewImage(null);
+                  }
+                }}
+            >
+                <img 
+                    src={previewImage} 
+                    alt="Preview" 
+                    className="max-w-full max-h-full object-contain transition-transform duration-300 ease-out shadow-2xl"
+                    style={{ 
+                        transform: `rotate(${imageRotation}deg) scale(${imageScale})`,
+                        cursor: 'grab'
+                    }}
+                />
+            </div>
+
+            {/* Bottom Controls */}
+            <div 
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-white/10 backdrop-blur-md px-6 py-3 rounded-full border border-white/20 z-20"
+                onClick={e => e.stopPropagation()}
+            >
+                <button 
+                  onClick={() => setImageRotation(r => r - 90)} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="向左旋转"
+                >
+                    <RotateCcw className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={() => setImageScale(s => Math.max(0.5, s - 0.25))} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="缩小"
+                >
+                    <ZoomOut className="w-6 h-6" />
+                </button>
+                
+                <span className="text-white/50 text-xs font-mono w-12 text-center">{(imageScale * 100).toFixed(0)}%</span>
+
+                <button 
+                  onClick={() => setImageScale(s => Math.min(3, s + 0.25))} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="放大"
+                >
+                    <ZoomIn className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={() => setImageRotation(r => r + 90)} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="向右旋转"
+                >
+                    <RotateCw className="w-6 h-6" />
+                </button>
+            </div>
+        </div>
+      )}
 
       {/* Floating TOC Button */}
       {headings.length > 0 && (
