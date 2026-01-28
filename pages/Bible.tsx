@@ -123,6 +123,47 @@ export const Bible: React.FC = () => {
   const oldTestament = books.filter(b => b.NewOrOld === 0);
   const newTestament = books.filter(b => b.NewOrOld === 1);
 
+  // Swipe Gesture Handling
+  const touchStartX = useRef<number | null>(null);
+  const touchStartY = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const touchEndY = useRef<number | null>(null);
+
+  const onTouchStart = (e: React.TouchEvent) => {
+      touchStartX.current = e.targetTouches[0].clientX;
+      touchStartY.current = e.targetTouches[0].clientY;
+  };
+
+  const onTouchMove = (e: React.TouchEvent) => {
+      touchEndX.current = e.targetTouches[0].clientX;
+      touchEndY.current = e.targetTouches[0].clientY;
+  };
+
+  const onTouchEnd = () => {
+      if (!touchStartX.current || !touchEndX.current) return;
+      
+      const distanceX = touchStartX.current - touchEndX.current;
+      const distanceY = touchStartY.current! - touchEndY.current!;
+      const isHorizontalSwipe = Math.abs(distanceX) > Math.abs(distanceY);
+
+      // Threshold of 50px for swipe
+      if (isHorizontalSwipe && Math.abs(distanceX) > 50) {
+          if (distanceX > 0) {
+              // Swiped Left -> Next Chapter
+              handleNextChapter();
+          } else {
+              // Swiped Right -> Prev Chapter
+              handlePrevChapter();
+          }
+      }
+      
+      // Reset
+      touchStartX.current = null;
+      touchEndX.current = null; 
+      touchStartY.current = null;
+      touchEndY.current = null;
+  };
+
   return (
     <div className="flex h-full bg-white dark:bg-gray-900 overflow-hidden relative">
       {/* Desktop Sidebar - Book List (Hidden on Mobile) */}
@@ -202,8 +243,8 @@ export const Bible: React.FC = () => {
         </div>
 
         {/* Header */}
-        <div className={`absolute left-0 right-0 h-14 md:h-16 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white dark:bg-gray-900 z-10 flex-shrink-0 transition-all duration-500 ease-in-out ${!isMenuVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`} style={{ top: window.innerWidth < 768 ? '0px' : '64px' }}>
-          <div className="flex items-center flex-1 min-w-0">
+        <div className={`absolute top-0 md:top-16 left-0 right-0 h-14 md:h-16 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between px-4 bg-white dark:bg-gray-900 z-10 flex-shrink-0 transition-all duration-500 ease-in-out ${!isMenuVisible ? '-translate-y-full opacity-0 pointer-events-none' : 'translate-y-0 opacity-100'}`}>
+          <div className="flex items-center flex-1 min-w-0 mr-2">
               <button 
                   className="hidden md:block mr-4 p-2 -ml-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
                   onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -213,7 +254,7 @@ export const Bible: React.FC = () => {
               
               {/* Mobile Book Selector Trigger */}
               <button 
-                className="md:hidden flex items-center text-left"
+                className="md:hidden flex items-center text-left min-w-0"
                 onClick={() => {
                     setShowBookModal(true);
                     setModalView('books');
@@ -222,7 +263,7 @@ export const Bible: React.FC = () => {
                  <h1 className="text-lg font-bold text-gray-900 dark:text-white truncate">
                     {currentBook?.FullName} {currentChapter}
                  </h1>
-                 <ChevronRight className="w-4 h-4 ml-1 text-gray-400" />
+                 <ChevronRight className="w-4 h-4 ml-1 flex-shrink-0 text-gray-400" />
               </button>
 
               {/* Desktop Title */}
@@ -268,7 +309,7 @@ export const Bible: React.FC = () => {
 
             <button 
               onClick={handlePrevChapter}
-              className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+              className="hidden md:block p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
               disabled={!currentBook || (currentBook.SN === 1 && currentChapter === 1)}
             >
               <ChevronLeft className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -287,7 +328,7 @@ export const Bible: React.FC = () => {
 
             <button 
               onClick={handleNextChapter}
-              className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
+              className="hidden md:block p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
               disabled={!currentBook || (currentBook.SN === 66 && currentChapter === 22)}
             >
               <ChevronRight className="w-5 h-5 text-gray-600 dark:text-gray-300" />
@@ -300,6 +341,9 @@ export const Bible: React.FC = () => {
           ref={versesContainerRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-36 bg-white dark:bg-gray-900 cursor-pointer"
           onClick={() => setMenuVisible(!isMenuVisible)}
+          onTouchStart={onTouchStart}
+          onTouchMove={onTouchMove}
+          onTouchEnd={onTouchEnd}
         >
           {loading ? (
             <div className="flex justify-center items-center h-full">
