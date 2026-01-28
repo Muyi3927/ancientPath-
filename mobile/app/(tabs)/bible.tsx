@@ -118,11 +118,9 @@ export default function BibleScreen() {
 
   const translationOptions: Record<BibleVersionKey, { label: string; description: string }> = {
     cuv: { label: '和合本', description: 'Chinese Union Version' },
-    cnv: { label: '新译本', description: 'Chinese New Version' },
     asv: { label: 'ASV', description: 'American Standard Version' },
   };
-  // const translationOrder: BibleVersionKey[] = ['cuv', 'cnv', 'asv'];
-  const translationOrder: BibleVersionKey[] = ['cuv', 'asv']; // Temporarily hidden CNV
+  const translationOrder: BibleVersionKey[] = ['cuv', 'asv'];
 
   const getVerseKey = (verse: BibleVerse) => `${verse.VolumeSN}-${verse.ChapterSN}-${verse.VerseSN}`;
 

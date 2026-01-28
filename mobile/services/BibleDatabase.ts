@@ -27,19 +27,6 @@ const VERSION_CONFIG = {
     verseParams: (bookId, chapter) => [bookId, chapter],
     searchParams: (query) => [`%${query}%`],
   },
-  cnv: {
-    dbName: 'bible_cnv.db',
-    asset: require('../assets/bible_cnv.db'),
-    booksQuery:
-      'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
-    versesQuery:
-      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE VolumeSN = ? AND ChapterSN = ? ORDER BY VerseSN ASC',
-    searchQuery:
-      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC LIMIT 100',
-    bookParams: () => [],
-    verseParams: (bookId, chapter) => [bookId, chapter],
-    searchParams: (query) => [`%${query}%`],
-  },
   asv: {
     dbName: 'ASV.db',
     asset: require('../assets/ASV.db'),
