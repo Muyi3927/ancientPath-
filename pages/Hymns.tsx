@@ -76,7 +76,7 @@ export const Hymns: React.FC = () => {
     const targetRootId = selectedSubCatId || activeRoot.id;
     const targetIds = new Set([targetRootId, ...getDescendantIds(targetRootId)]);
     
-    return allPosts.filter(p => targetIds.has(Number(p.categoryId)));
+    return allPosts.filter(p => targetIds.has(Number(p.categoryId)) && !p.tags.includes('__draft__'));
   }, [allPosts, activeRoot, selectedSubCatId, getDescendantIds]);
 
   if (loading) {

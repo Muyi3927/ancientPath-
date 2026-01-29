@@ -42,7 +42,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   useEffect(() => {
     if (post) {
       const timer = setTimeout(() => {
-        const elements = document.querySelectorAll('.prose h1, .prose h2, .prose h3');
+        const elements = document.querySelectorAll('.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6');
         const h = Array.from(elements).map(el => ({
           id: el.id,
           text: el.textContent || '',
@@ -347,18 +347,26 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
               </button>
             </div>
             <nav className="space-y-1">
-              {headings.map((h, i) => (
+              {headings.map((h, i) => {
+                let indentClass = '';
+                if (h.level === 1) indentClass = 'font-bold';
+                else if (h.level === 2) indentClass = 'pl-6';
+                else if (h.level === 3) indentClass = 'pl-9 text-slate-500 dark:text-slate-400';
+                else if (h.level === 4) indentClass = 'pl-12 text-slate-500 dark:text-slate-400 text-xs';
+                else if (h.level >= 5) indentClass = 'pl-14 text-slate-500 dark:text-slate-400 text-xs italic';
+
+                return (
                 <button 
                   key={i} 
                   onClick={() => {
                     setShowTOC(false);
                     document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
                   }}
-                  className={`block w-full text-left py-2 px-3 rounded-lg text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'pl-6' : 'pl-9 text-slate-500 dark:text-slate-400'}`}
+                  className={`block w-full text-left py-2 px-3 rounded-lg text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ${indentClass}`}
                 >
                   {h.text}
                 </button>
-              ))}
+              )})}
             </nav>
           </div>
         </div>

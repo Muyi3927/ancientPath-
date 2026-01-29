@@ -96,7 +96,7 @@ export const Categories: React.FC = () => {
     if (!activeCategoryId) return [];
     
     const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId)]);
-    return allPosts.filter(p => targetIds.has(p.categoryId));
+    return allPosts.filter(p => targetIds.has(p.categoryId) && !p.tags.includes('__draft__'));
   }, [allPosts, activeCategoryId, categories, getDescendantIds]);
 
   const handleL1Select = (id: number) => {

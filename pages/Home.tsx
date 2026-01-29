@@ -83,6 +83,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       const targetIds = new Set([catId, ...getDescendantIds(catId)]);
       
       return posts.filter(p => {
+          if (p.tags.includes('__draft__')) return false;
           const pCatId = Number(p.categoryId);
           return targetIds.has(pCatId) && !excludedCategoryIds.has(pCatId);
       }).length;
@@ -92,6 +93,8 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
   const tagCounts = useMemo(() => {
       const counts: Record<string, number> = {};
       posts.forEach(p => {
+          if (p.tags.includes('__draft__')) return;
+
           // Exclude posts from hidden categories for tags too? Maybe. 
           // User said "poetry categories... do not appear on home page". 
           // Usually implies tags from them shouldn't clutter home either.
@@ -110,27 +113,33 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
   const filteredPosts = useMemo(() => {
     return posts.filter((post) => {
-      // 排除隐藏分类
+      // 1. 严格排除草稿 (含有 __draft__ 标签的即视为未发布/草稿)
+      if (post.tags.includes('__draft__')) return false;
+
+      // 2. 排除被配置为隐藏的特定分类 (如 '韵律诗篇', '圣诗')
       if (excludedCategoryIds.has(Number(post.categoryId))) return false;
 
-      // 首页显示控制: 只有在没有任何筛选条件(即纯首页浏览)时，才遵循 showOnHomepage 设置
-      // 如果文章设置为不显示在首页(showOnHomepage === false)，则隐藏
+      // 3. 首页显示控制: 只有在没有任何筛选条件(即纯首页浏览)时，才遵循 showOnHomepage 设置
       const isDefaultHomeView = activeCategoryId === null && !tagFilter && !searchQuery;
       if (isDefaultHomeView && post.showOnHomepage === false) return false;
 
-      // 分类逻辑：包含精确匹配 OR 如果文章分类是选中分类的子分类 (递归)
+      // 4. 分类筛选逻辑：精确匹配 OR 子分类递归匹配
       let matchesCategory = true;
       if (activeCategoryId !== null) {
         const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId)]);
         matchesCategory = targetIds.has(Number(post.categoryId));
       }
 
+      // 5. 标签筛选
       const matchesTag = tagFilter ? post.tags.includes(tagFilter) : true;
+
+      // 6. 关键词搜索
       const matchesSearch = searchQuery 
         ? post.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
           post.excerpt.toLowerCase().includes(searchQuery.toLowerCase()) ||
           post.tags.some((tag) => tag.toLowerCase().includes(searchQuery.toLowerCase()))
         : true;
+        
       return matchesCategory && matchesSearch && matchesTag;
     });
   }, [posts, activeCategoryId, searchQuery, tagFilter, categories, excludedCategoryIds]);
@@ -139,7 +148,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
   const totalPages = Math.ceil(filteredPosts.length / ITEMS_PER_PAGE);
   const paginatedPosts = filteredPosts.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
 
-  const featuredPosts = useMemo(() => posts.filter((p) => p.isFeatured && !excludedCategoryIds.has(Number(p.categoryId))), [posts, excludedCategoryIds]);
+  const featuredPosts = useMemo(() => posts.filter((p) => !p.tags.includes('__draft__') && p.isFeatured && !excludedCategoryIds.has(Number(p.categoryId))), [posts, excludedCategoryIds]);
 
   // 轮播图自动播放
   useEffect(() => {

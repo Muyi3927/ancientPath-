@@ -56,9 +56,11 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
   const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHeadingPicker, setShowHeadingPicker] = useState(false);
   
   // Draft State
   const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
 
   // Category Creation/Management State
   const [isManagingCategory, setIsManagingCategory] = useState(false);
@@ -96,7 +98,9 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
         setContent(d.content);
         setExcerpt(d.excerpt);
         setCategoryId(d.categoryId);
-        setCurrentTags(d.currentTags);
+        if (Array.isArray(d.currentTags)) {
+             setCurrentTags(d.currentTags.filter((t: string) => t !== '__draft__'));
+        }
         setCoverImage(d.coverImage);
         setAudioUrl(d.audioUrl);
         setIsFeatured(d.isFeatured);
@@ -109,7 +113,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
         setContent(post.content);
         setExcerpt(post.excerpt);
         setCategoryId(post.categoryId);
-        setCurrentTags(post.tags);
+        setCurrentTags(post.tags.filter(t => t !== '__draft__'));
         setCoverImage(post.coverImage);
         setIsFeatured(post.isFeatured || false);
         setShowOnHomepage(post.showOnHomepage !== false);
@@ -314,36 +318,25 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
     }
   };
 
-  const handleSaveDraft = () => {
-      const draftData = {
-          title,
-          content,
-          excerpt,
-          categoryId,
-          currentTags,
-          coverImage,
-          audioUrl,
-          isFeatured,
-          showOnHomepage,
-          timestamp: Date.now()
-      };
-      
-      // Save to LocalStorage with a unique key or list
-      const drafts = JSON.parse(localStorage.getItem('admin_drafts') || '[]');
-      // If editing an existing draft (by ID if we had one, or title match?), for now just append new
-      // Or checking if we are editing an ID?
-      // Let's just save as a new entry for "Temporary Drafts"
-      drafts.unshift(draftData);
-      localStorage.setItem('admin_drafts', JSON.stringify(drafts));
-      setLastDraftSave(new Date().toLocaleTimeString());
-      alert('草稿已保存到本地！');
-  };
-
-  const handleSave = async () => {
-    if (!title || !content || categoryId === undefined) return alert("标题、内容和分类不能为空");
+  const handleSavePost = async (forceDraft: boolean = false) => {
+    if (!title || !content) return alert("标题和内容不能为空");
     
-    setIsSubmitting(true);
-    // const finalCoverImage = coverImage || `https://picsum.photos/800/400?random=${Math.floor(Math.random()*100)}`;
+    // Drafts might not have a category set yet. Default to 0 or first category if available.
+    const finalCategoryId = categoryId !== undefined ? categoryId : (categories.length > 0 ? categories[0].id : 0);
+    
+    if (forceDraft) setIsDraftSaving(true);
+    else setIsSubmitting(true);
+    
+    // Prepare tags: Clean existing __draft__ tag then re-evaluate
+    const tagsToSave = currentTags.filter(t => t !== '__draft__');
+    
+    // If saving as draft, add the tag.
+    // If publishing (forceDraft=false), we DO NOT add the tag, meaning it's published.
+    // The previous isPublished state is removed; publishing is direct.
+    if (forceDraft) {
+        tagsToSave.push('__draft__');
+    }
+
     // User requested no automatic random image.
     const finalCoverImage = coverImage;
     const finalExcerpt = excerpt.trim() || (content.substring(0, 100) + '...');
@@ -353,31 +346,43 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       excerpt: finalExcerpt,
       content,
       coverImage: finalCoverImage,
-      categoryId: categoryId,
-      tags: currentTags,
-      isFeatured,
-      showOnHomepage,
+      categoryId: finalCategoryId,
+      tags: tagsToSave,
+      isFeatured: isFeatured && !forceDraft, // Only featured if published (not draft)
+      showOnHomepage: showOnHomepage, // Keeps user preference
       audioUrl
     };
 
     try {
+       let savedPostId = id;
        if (id) {
          await updatePost(id, postData);
        } else {
-         await createPost(postData);
+         const newPost = await createPost(postData);
+         savedPostId = newPost.id;
        }
        
-       // Refresh data from server to ensure consistency
        await onRefresh();
        
-       navigate('/');
+       if (forceDraft) {
+           alert('已保存到云端草稿箱！');
+           if (!id && savedPostId) {
+               navigate(`/editor/${savedPostId}`, { replace: true });
+           }
+       } else {
+           navigate('/');
+       }
     } catch (e) {
        console.error("保存失败", e);
        alert(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
     } finally {
       setIsSubmitting(false);
+      setIsDraftSaving(false);
     }
   };
+
+  const handleSaveDraft = () => handleSavePost(true);
+  const handleSave = () => handleSavePost(false);
 
   const handleAddCategory = () => {
     if (newCategoryName.trim()) {
@@ -412,9 +417,11 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
            </button>
            <button 
             onClick={handleSaveDraft}
+            disabled={isDraftSaving}
             className="px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-800 flex items-center text-sm font-bold transition-colors"
            >
-             <Save className="w-4 h-4 mr-2" /> 存草稿
+             {isDraftSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+             存云端草稿
            </button>
            <button 
             onClick={handleSave}
@@ -443,6 +450,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                         onChange={e => setTitle(e.target.value)}
                         className="flex-grow bg-transparent text-2xl font-serif font-bold focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
                     />
+                    
                     <button 
                         onClick={() => setShowOnHomepage(!showOnHomepage)}
                         className={`p-2 rounded-full transition-all ${showOnHomepage ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
@@ -725,9 +733,32 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                         <Minimize className="w-4 h-4" />
                     </button>
                     <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
-                    <button onClick={() => insertMarkdown('### ')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="标题">
-                        <Heading className="w-4 h-4" />
-                    </button>
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowHeadingPicker(!showHeadingPicker)} 
+                            className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 ${showHeadingPicker ? 'bg-slate-200 dark:bg-slate-800 text-primary-600' : 'text-slate-600 dark:text-slate-400'}`} 
+                            title="标题级别"
+                        >
+                            <Heading className="w-4 h-4" />
+                        </button>
+                        {showHeadingPicker && (
+                            <div className="absolute top-full left-0 mt-2 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 flex flex-col w-40 p-1 max-h-60 overflow-y-auto">
+                                {[1, 2, 3, 4, 5, 6].map(level => (
+                                    <button
+                                        key={level}
+                                        onClick={() => {
+                                            insertMarkdown('#'.repeat(level) + ' ');
+                                            setShowHeadingPicker(false);
+                                        }}
+                                        className="text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 rounded flex items-center gap-2"
+                                    >
+                                        <span className="font-mono text-xs opacity-50 text-slate-400">{'#'.repeat(level)}</span>
+                                        <span className={`${level === 1 ? 'text-lg font-bold' : level === 2 ? 'text-base font-bold' : 'text-sm'}`}>标题 {level}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                     <button onClick={() => insertMarkdown('> ')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="引用">
                         <Quote className="w-4 h-4" />
                     </button>

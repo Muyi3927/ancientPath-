@@ -237,7 +237,7 @@ const App: React.FC = () => {
                   />
                 } 
               />
-              <Route path="/drafts" element={<Drafts />} />
+              <Route path="/drafts" element={<Drafts posts={posts} onRefresh={refreshPosts} />} />
               <Route 
                 path="/editor/:id" 
                 element={
