@@ -240,20 +240,32 @@ export default function HomeScreen() {
                   </View>
                 ) : null}
 
+                {/* Gradient overlay covering entire image */}
+                <View className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
+
                 {/* Category Label */}
                 {featuredPosts[carouselIndex].categoryId && getCategoryName(featuredPosts[carouselIndex].categoryId) ? (
-                    <View className="absolute top-2 left-2 bg-blue-600/90 px-2.5 py-1 rounded-md shadow-sm backdrop-blur-md z-10">
+                    <View className="absolute top-2 left-2 bg-blue-600 px-2.5 py-1 rounded-full shadow-lg z-10">
                         <Text className="text-white text-xs font-bold tracking-wide">
                             {getCategoryName(featuredPosts[carouselIndex].categoryId)}
                         </Text>
                     </View>
                 ) : null}
 
-                <View className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent p-4 pt-16">
-                  <Text className="text-white font-bold text-lg mb-1 leading-tight" numberOfLines={2}>
+                {/* Text content at bottom */}
+                <View className="absolute bottom-0 left-0 right-0 p-4 pt-16">
+                  <Text 
+                    className="text-white font-bold text-lg mb-1 leading-tight" 
+                    numberOfLines={2}
+                    style={{ textShadowColor: 'rgba(0, 0, 0, 0.9)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 }}
+                  >
                     {featuredPosts[carouselIndex].title}
                   </Text>
-                  <Text className="text-slate-200 text-xs font-medium leading-relaxed" numberOfLines={6}>
+                  <Text 
+                    className="text-slate-200 text-xs font-medium leading-relaxed" 
+                    numberOfLines={6}
+                    style={{ textShadowColor: 'rgba(0, 0, 0, 0.8)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 6 }}
+                  >
                     {featuredPosts[carouselIndex].excerpt}
                   </Text>
                 </View>
