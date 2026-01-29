@@ -33,6 +33,9 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // TOC State
   const [showTOC, setShowTOC] = useState(false);
   const [headings, setHeadings] = useState<{id: string, text: string, level: number}[]>([]);
+  const [tocMaxLevel, setTocMaxLevel] = useState(3);
+  const [currentHeadingId, setCurrentHeadingId] = useState<string>('');
+  const tocContainerRef = useRef<HTMLDivElement>(null);
 
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -53,6 +56,42 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       return () => clearTimeout(timer);
     }
   }, [post]);
+
+  // Track current heading on scroll
+  useEffect(() => {
+    const handleScroll = () => {
+      if (headings.length === 0) return;
+      
+      const scrollPosition = window.scrollY + 100;
+      
+      // Find current heading
+      let currentId = '';
+      for (let i = headings.length - 1; i >= 0; i--) {
+        const element = document.getElementById(headings[i].id);
+        if (element && element.offsetTop <= scrollPosition) {
+          currentId = headings[i].id;
+          break;
+        }
+      }
+      
+      setCurrentHeadingId(currentId);
+    };
+
+    window.addEventListener('scroll', handleScroll);
+    handleScroll(); // Initial check
+    
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [headings]);
+
+  // Scroll TOC to current heading when level changes
+  useEffect(() => {
+    if (showTOC && currentHeadingId && tocContainerRef.current) {
+      const currentButton = tocContainerRef.current.querySelector(`[data-heading-id="${currentHeadingId}"]`);
+      if (currentButton) {
+        currentButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [showTOC, tocMaxLevel, currentHeadingId]);
 
   useEffect(() => {
     // --- 修复: 使用非严格相等 (==) 来比较数字 ID 和 URL 中的字符串 ID ---
@@ -236,8 +275,13 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {/* Post Content with dynamic font size class */}
           <MarkdownRenderer 
             content={post.content} 
-            className={`max-w-none font-serif text-slate-700 dark:text-slate-300 leading-loose transition-all duration-200`} 
-            style={{ fontSize: `${fontSizeScale}rem` }}
+            className={`max-w-none font-serif text-slate-700 dark:text-slate-300 transition-all duration-200`} 
+            style={{ 
+              fontSize: `${fontSizeScale}rem`,
+              lineHeight: '1.8',
+              letterSpacing: '0.025em',
+              wordSpacing: '0.05em'
+            }}
             onImageClick={handleImageClick}
           />
 
@@ -337,36 +381,129 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       {showTOC && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end md:flex-row md:justify-end bg-black/20 backdrop-blur-sm" onClick={() => setShowTOC(false)}>
           <div 
-            className="w-full md:w-80 h-[60vh] md:h-full bg-white dark:bg-slate-900 shadow-2xl p-6 overflow-y-auto rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom md:slide-in-from-right duration-300"
+            className="w-full md:w-96 h-[70vh] md:h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom md:slide-in-from-right duration-300"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-serif font-bold text-xl text-slate-900 dark:text-white">目录</h3>
-              <button onClick={() => setShowTOC(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <h3 className="font-serif font-bold text-xl text-slate-900 dark:text-white">目录</h3>
+                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                  <button
+                    onClick={() => setTocMaxLevel(2)}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      tocMaxLevel === 2
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    简
+                  </button>
+                  <button
+                    onClick={() => setTocMaxLevel(3)}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      tocMaxLevel === 3
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    中
+                  </button>
+                  <button
+                    onClick={() => setTocMaxLevel(6)}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      tocMaxLevel === 6
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    详
+                  </button>
+                </div>
+              </div>
+              <button onClick={() => setShowTOC(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
               </button>
             </div>
-            <nav className="space-y-1">
-              {headings.map((h, i) => {
-                let indentClass = '';
-                if (h.level === 1) indentClass = 'font-bold';
-                else if (h.level === 2) indentClass = 'pl-6';
-                else if (h.level === 3) indentClass = 'pl-9 text-slate-500 dark:text-slate-400';
-                else if (h.level === 4) indentClass = 'pl-12 text-slate-500 dark:text-slate-400 text-xs';
-                else if (h.level >= 5) indentClass = 'pl-14 text-slate-500 dark:text-slate-400 text-xs italic';
 
-                return (
-                <button 
-                  key={i} 
-                  onClick={() => {
-                    setShowTOC(false);
-                    document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className={`block w-full text-left py-2 px-3 rounded-lg text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ${indentClass}`}
-                >
-                  {h.text}
-                </button>
-              )})}
+            {/* TOC Content */}
+            <nav ref={tocContainerRef} className="flex-1 overflow-y-auto px-6 pt-4" style={{ paddingBottom: '4rem' }}>
+              <div className="space-y-1">
+                {headings.filter(h => h.level <= tocMaxLevel).map((h, i) => {
+                  // Simple highlight logic: check if this heading is the current one or contains it
+                  let isHighlighted = false;
+                  
+                  if (currentHeadingId) {
+                    const currentIndex = headings.findIndex(hd => hd.id === currentHeadingId);
+                    const thisIndex = headings.findIndex(hd => hd.id === h.id);
+                    
+                    if (currentIndex >= 0 && thisIndex >= 0 && thisIndex <= currentIndex) {
+                      // This heading is before or at current position
+                      // Check if the next heading of same or higher level is after current position
+                      let nextSameLevelIndex = headings.findIndex((hd, idx) => 
+                        idx > thisIndex && hd.level <= h.level
+                      );
+                      
+                      // This heading contains current position
+                      const containsCurrent = (nextSameLevelIndex === -1 || nextSameLevelIndex > currentIndex);
+                      
+                      if (containsCurrent) {
+                        // Check if there's a higher-level (lower number) heading in filtered list that also contains current
+                        const filteredHeadings = headings.filter(hd => hd.level <= tocMaxLevel);
+                        const hasHigherLevelInFiltered = filteredHeadings.some((other) => {
+                          if (other.level >= h.level) return false;
+                          
+                          const otherIndex = headings.findIndex(hd => hd.id === other.id);
+                          if (otherIndex > currentIndex || otherIndex > thisIndex) return false;
+                          
+                          // Check if other heading contains current position
+                          let nextOtherSameLevelIndex = headings.findIndex((hd, idx) => 
+                            idx > otherIndex && hd.level <= other.level
+                          );
+                          
+                          return (nextOtherSameLevelIndex === -1 || nextOtherSameLevelIndex > currentIndex);
+                        });
+                        
+                        isHighlighted = !hasHigherLevelInFiltered;
+                      }
+                    }
+                  }
+
+                  let indentClass = '';
+                  if (h.level === 1) indentClass = 'pl-0';
+                  else if (h.level === 2) indentClass = 'pl-4';
+                  else if (h.level === 3) indentClass = 'pl-8';
+                  else if (h.level === 4) indentClass = 'pl-12';
+                  else if (h.level >= 5) indentClass = 'pl-16';
+
+                  return (
+                    <button 
+                      key={i}
+                      data-heading-id={h.id}
+                      onClick={() => {
+                        const element = document.getElementById(h.id);
+                        if (element) {
+                          setShowTOC(false);
+                          setTimeout(() => {
+                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                          }, 50);
+                        } else {
+                          console.log('Element not found:', h.id);
+                        }
+                      }}
+                      className={`block w-full text-left py-2.5 px-3 rounded-lg text-sm transition-all ${
+                        indentClass
+                      } ${
+                        isHighlighted
+                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold border-l-4 border-blue-600 dark:border-blue-400'
+                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                      }`}
+                    >
+                      {h.text}
+                    </button>
+                  );
+                })}
+              </div>
             </nav>
           </div>
         </div>

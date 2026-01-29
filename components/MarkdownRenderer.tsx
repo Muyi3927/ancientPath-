@@ -13,7 +13,19 @@ interface MarkdownRendererProps {
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '', style, onImageClick }) => {
   return (
-    <div className={`prose dark:prose-invert max-w-none prose-img:rounded-xl prose-headings:font-serif prose-a:text-primary-600 ${className}`} style={style}>
+    <div 
+      className={`prose dark:prose-invert max-w-none prose-img:rounded-xl prose-headings:font-serif prose-a:text-primary-600 ${className}`} 
+      style={{
+        ...style,
+        wordSpacing: '0.05em',
+        letterSpacing: '0.025em',
+        fontKerning: 'normal',
+        fontVariantLigatures: 'normal',
+        textRendering: 'optimizeLegibility',
+        WebkitFontSmoothing: 'antialiased',
+        MozOsxFontSmoothing: 'grayscale'
+      }}
+    >
       <ReactMarkdown 
         remarkPlugins={[remarkGfm]} 
         rehypePlugins={[rehypeRaw, rehypeSlug]}
