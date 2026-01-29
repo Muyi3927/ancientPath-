@@ -74,7 +74,7 @@ export default function CategoriesScreen() {
         }
         
         if (cachedPosts && cachedPosts.length > 0) {
-            setAllPosts(cachedPosts);
+            setAllPosts(cachedPosts.filter(p => !p.tags.includes('__draft__')));
             setLoadingPosts(false);
         }
       } catch (e) {
@@ -92,19 +92,15 @@ export default function CategoriesScreen() {
             const firstL1 = sortedData.find(c => !c.parentId);
             return firstL1 ? firstL1.id : null;
         });
+
+        // 3. Fetch Posts (in background if needed, but here we invoke explicit load)
+        const posts = await getPosts();
+        setAllPosts(posts.filter(p => !p.tags.includes('__draft__')));
+        setLoadingPosts(false);
       } catch (e) {
         console.error(e);
       } finally {
         setLoadingCats(false);
-      }
-
-      try {
-        const posts = await getPosts();
-        setAllPosts(posts);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingPosts(false);
       }
     };
 

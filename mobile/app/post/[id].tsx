@@ -183,7 +183,7 @@ export default function PostDetailScreen() {
           const headings = tokens
             .filter((t: any) => t.type === 'heading')
             .map((t: any, index: number) => ({
-              text: t.text,
+              text: t.text.replace(/<[^>]+>/g, ''),
               level: t.depth,
               key: `heading-${index}`
             }));

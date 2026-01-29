@@ -31,7 +31,8 @@ export default function HomeScreen() {
         getCategories()
       ]);
       
-      setAllPosts(postsData);
+      const filteredPosts = postsData.filter(p => !p.tags.includes('__draft__'));
+      setAllPosts(filteredPosts);
       setCategories(categoriesData);
     } catch (err) {
       setError('无法连接到服务器，请检查网络');
@@ -78,7 +79,7 @@ export default function HomeScreen() {
         
         // 只有当缓存中有数据时才提前显示
         if (cachedPosts && cachedCats && (cachedPosts.length > 0 || cachedCats.length > 0)) {
-          setAllPosts(cachedPosts);
+          setAllPosts(cachedPosts.filter(p => !p.tags.includes('__draft__')));
           setCategories(cachedCats);
           setLoading(false); // 立即停止加载状态，让用户可以交互
         }
