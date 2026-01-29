@@ -1,6 +1,6 @@
 import { useLocalSearchParams, Stack } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent, Platform } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent, Platform, Pressable, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import { Image } from 'expo-image';
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from 'react-native-render-html';
 import { marked } from 'marked';
@@ -49,6 +49,7 @@ export default function PostDetailScreen() {
   const headerPositionsRef = useRef<{[index: number]: number}>({});
   const htmlContainerYRef = useRef(0);
   const [initialScrollY, setInitialScrollY] = useState(0);
+  const currentScrollY = useRef(0);
 
   const isHymn = useMemo(() => {
     if (!post || categories.length === 0) return false;
@@ -66,17 +67,35 @@ export default function PostDetailScreen() {
     }
 
     const HeadingRenderer = ({ TDefaultRenderer, ...props }: any) => {
+        const viewRef = useRef<View>(null);
+        
         const onLayout = (e: any) => {
-            const y = e.nativeEvent.layout.y;
-            const text = getText(props.tnode);
-            // Simple matching by text content
-            const index = toc.findIndex(t => t.text === text);
-            if (index !== -1) {
-                headerPositionsRef.current[index] = y;
+            // Retrieve the ID we injected via the custom renderer
+            const id = props.tnode.attributes.id;
+            if (id && viewRef.current && scrollViewRef.current) {
+                // Measure position relative to the ScrollView
+                viewRef.current.measureLayout(
+                    scrollViewRef.current as any,
+                    (x, y, width, height) => {
+                        const index = toc.findIndex(t => t.key === id);
+                        if (index !== -1) {
+                            headerPositionsRef.current[index] = y;
+                        }
+                    },
+                    () => {
+                        // Fallback to simple layout if measureLayout fails
+                        const y = e.nativeEvent.layout.y;
+                        const index = toc.findIndex(t => t.key === id);
+                        if (index !== -1) {
+                            headerPositionsRef.current[index] = y + htmlContainerYRef.current;
+                        }
+                    }
+                );
             }
         };
+        
         return (
-            <View onLayout={onLayout}>
+            <View ref={viewRef} onLayout={onLayout}>
                 <TDefaultRenderer {...props} />
             </View>
         );
@@ -91,7 +110,7 @@ export default function PostDetailScreen() {
         const index = originalImageUrls.indexOf(src);
 
         return (
-            <TouchableOpacity 
+            <Pressable 
                 onPress={() => {
                    // If found in gallery, open at index; otherwise fallback to single image view
                    if (index !== -1) {
@@ -102,7 +121,6 @@ export default function PostDetailScreen() {
                        console.warn("Image found in render but not in extracted list:", src);
                    }
                 }} 
-                activeOpacity={0.9} 
                 className="my-4 relative"
             >
                 <Image 
@@ -121,7 +139,7 @@ export default function PostDetailScreen() {
                     <IconSymbol name="magnifyingglass" size={12} color="white" />
                     <Text className="text-white text-xs ml-1.5 font-medium">点击图片查看大图</Text>
                 </View>
-            </TouchableOpacity>
+            </Pressable>
         );
     };
 
@@ -129,6 +147,9 @@ export default function PostDetailScreen() {
         h1: HeadingRenderer,
         h2: HeadingRenderer,
         h3: HeadingRenderer,
+        h4: HeadingRenderer,
+        h5: HeadingRenderer,
+        h6: HeadingRenderer,
         img: ImageRenderer
     };
   }, [toc, isDark, originalImageUrls]);
@@ -148,9 +169,9 @@ export default function PostDetailScreen() {
           },
           headerRight: () => (
             <View className="flex-row">
-                <TouchableOpacity onPress={() => setSettingsVisible(true)} className="mr-4">
+                <Pressable onPress={() => setSettingsVisible(true)} className="mr-4">
                     <IconSymbol name="textformat.size" size={24} color={isDark ? '#fff' : '#000'} />
-                </TouchableOpacity>
+                </Pressable>
             </View>
           )
         }} 
@@ -178,15 +199,48 @@ export default function PostDetailScreen() {
         .then(([postData, cats]) => {
           setPost(postData);
           setCategories(cats);
-          // Parse TOC
+          
+          // Use a fresh marked instance for TOC extraction to avoid renderer pollution if needed
+          // But here we just use the lexer which is fine
           const tokens = marked.lexer(postData.content);
-          const headings = tokens
-            .filter((t: any) => t.type === 'heading')
-            .map((t: any, index: number) => ({
-              text: t.text.replace(/<[^>]+>/g, ''),
-              level: t.depth,
-              key: `heading-${index}`
-            }));
+          
+          const extractedHeadings: any[] = [];
+          
+          // Recursive function to find headings in the same order as marked renderer
+          const traverse = (nodes: any[]) => {
+              if (!nodes || !Array.isArray(nodes)) return;
+              for (const node of nodes) {
+                  if (node.type === 'heading') {
+                      extractedHeadings.push(node);
+                  }
+                  
+                  // Handle nested tokens (blockquotes, etc)
+                  if (node.tokens) {
+                      traverse(node.tokens);
+                  }
+                  
+                  // Handle list items
+                  if (node.items) {
+                      node.items.forEach((item: any) => {
+                          if (item.tokens) traverse(item.tokens);
+                      });
+                  }
+              }
+          };
+          
+          traverse(tokens);
+
+          let headingCount = 0;
+          const headings = extractedHeadings.map((t: any) => {
+               // Must match the ID generation logic in the custom renderer below
+               const key = `heading-${headingCount++}`; 
+               return {
+                  text: t.text.replace(/<[^>]+>/g, ''), // Strip HTML tags for list display
+                  level: t.depth,
+                  key: key
+               };
+            });
+          setToc(headings);
           setToc(headings);
         })
         .catch(console.error)
@@ -213,6 +267,7 @@ export default function PostDetailScreen() {
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (id) {
         const y = event.nativeEvent.contentOffset.y;
+        currentScrollY.current = y;
         if (y > 0) {
             saveReadingProgress(Number(id), y);
         }
@@ -267,6 +322,65 @@ export default function PostDetailScreen() {
     }
   };
 
+  const [tocMaxLevel, setTocMaxLevel] = useState(3);
+  const tocFlatListRef = useRef<FlatList>(null);
+
+  // Helper function to scroll TOC to current reading position
+  const scrollTocToCurrentPosition = useCallback(() => {
+    if (!tocFlatListRef.current || toc.length === 0) return;
+    
+    const filteredToc = toc.filter(h => h.level <= tocMaxLevel);
+    
+    // If filtered list is empty, don't try to scroll
+    if (filteredToc.length === 0) return;
+    
+    let currentIndex = 0;
+    
+    for (let i = 0; i < toc.length; i++) {
+      const headingY = headerPositionsRef.current[i];
+      if (headingY !== undefined && headingY <= currentScrollY.current + 100) {
+        const filteredIndex = filteredToc.findIndex(t => t.key === toc[i].key);
+        if (filteredIndex !== -1) {
+          currentIndex = filteredIndex;
+        }
+      }
+    }
+    
+    // Use setTimeout to ensure FlatList is ready
+    setTimeout(() => {
+      if (filteredToc.length > 0) {
+        tocFlatListRef.current?.scrollToIndex({
+          index: Math.max(0, Math.min(currentIndex, filteredToc.length - 1)),
+          animated: true,
+          viewPosition: 0.5, // Center the item
+        });
+      }
+    }, 100);
+  }, [toc, tocMaxLevel]);
+
+  // Scroll TOC when level changes
+  useEffect(() => {
+    if (tocVisible) {
+      scrollTocToCurrentPosition();
+    }
+  }, [tocMaxLevel, tocVisible, scrollTocToCurrentPosition]);
+
+  const htmlContent = useMemo(() => {
+      if (!post) return '';
+      
+      const renderer = new marked.Renderer();
+      let headingCount = 0;
+      // @ts-ignore
+      renderer.heading = function ({ tokens, depth }) {
+          const id = `heading-${headingCount++}`;
+          // @ts-ignore
+          const text = this.parser ? this.parser.parseInline(tokens) : (tokens.map(t => t.text).join(''));
+          return `<h${depth} id="${id}">${text}</h${depth}>`;
+      };
+      
+      return marked.parse(post.content, { renderer });
+  }, [post]);
+
   if (loading) {
     return (
       <>
@@ -288,8 +402,6 @@ export default function PostDetailScreen() {
       </>
     );
   }
-
-  const htmlContent = marked.parse(post.content);
 
   const baseFontSize = 18 * fontSizeScale;
   const lineHeight = 30 * fontSizeScale;
@@ -428,7 +540,7 @@ export default function PostDetailScreen() {
     const y = headerPositionsRef.current[index];
     if (y !== undefined && scrollViewRef.current) {
         scrollViewRef.current.scrollTo({ 
-            y: y + htmlContainerYRef.current, 
+            y: y, 
             animated: true 
         });
     }
@@ -508,12 +620,12 @@ export default function PostDetailScreen() {
 
         {/* Floating TOC Button */}
         {toc.length > 0 && (
-            <TouchableOpacity 
+            <Pressable 
                 className="absolute bottom-8 right-6 bg-blue-600 p-4 rounded-full shadow-lg"
                 onPress={() => setTocVisible(true)}
             >
                 <IconSymbol name="list.bullet" size={24} color="white" />
-            </TouchableOpacity>
+            </Pressable>
         )}
 
         {/* TOC Modal */}
@@ -524,34 +636,166 @@ export default function PostDetailScreen() {
             onRequestClose={() => setTocVisible(false)}
         >
             <View className="flex-1 justify-end">
-                <TouchableOpacity 
+                <Pressable 
                     className="absolute inset-0" 
-                    activeOpacity={1} 
                     onPress={() => setTocVisible(false)}
                 />
-                <View className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl max-h-[70%] p-4 shadow-2xl border-t border-slate-200 dark:border-slate-800">
+                <View className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl h-[70%] p-4 shadow-2xl border-t border-slate-200 dark:border-slate-800">
                     <View className="flex-row justify-between items-center mb-4 border-b border-slate-200 dark:border-slate-800 pb-2">
-                        <Text className="text-lg font-bold text-slate-900 dark:text-white">目录</Text>
-                        <TouchableOpacity onPress={() => setTocVisible(false)}>
+                        <View className="flex-row items-center gap-2">
+                            <Text className="text-lg font-bold text-slate-900 dark:text-white">目录</Text>
+                            <View style={{ flexDirection: 'row', backgroundColor: isDark ? '#1e293b' : '#e2e8f0', borderRadius: 8, padding: 2, marginLeft: 8 }}>
+                                <RNTouchableOpacity 
+                                    onPress={() => setTocMaxLevel(2)}
+                                    style={{
+                                        paddingHorizontal: 8, 
+                                        paddingVertical: 4, 
+                                        borderRadius: 6,
+                                        backgroundColor: tocMaxLevel === 2 ? (isDark ? '#334155' : '#fff') : 'transparent',
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: tocMaxLevel === 2 ? 'bold' : 'normal', color: tocMaxLevel === 2 ? (isDark ? '#fff' : '#0f172a') : (isDark ? '#94a3b8' : '#64748b') }}>简</Text>
+                                </RNTouchableOpacity>
+                                <RNTouchableOpacity 
+                                    onPress={() => setTocMaxLevel(3)}
+                                    style={{
+                                        paddingHorizontal: 8, 
+                                        paddingVertical: 4, 
+                                        borderRadius: 6,
+                                        backgroundColor: tocMaxLevel === 3 ? (isDark ? '#334155' : '#fff') : 'transparent',
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: tocMaxLevel === 3 ? 'bold' : 'normal', color: tocMaxLevel === 3 ? (isDark ? '#fff' : '#0f172a') : (isDark ? '#94a3b8' : '#64748b') }}>中</Text>
+                                </RNTouchableOpacity>
+                                <RNTouchableOpacity 
+                                    onPress={() => setTocMaxLevel(6)}
+                                    style={{
+                                        paddingHorizontal: 8, 
+                                        paddingVertical: 4, 
+                                        borderRadius: 6,
+                                        backgroundColor: tocMaxLevel === 6 ? (isDark ? '#334155' : '#fff') : 'transparent',
+                                    }}
+                                >
+                                    <Text style={{ fontSize: 12, fontWeight: tocMaxLevel === 6 ? 'bold' : 'normal', color: tocMaxLevel === 6 ? (isDark ? '#fff' : '#0f172a') : (isDark ? '#94a3b8' : '#64748b') }}>详</Text>
+                                </RNTouchableOpacity>
+                            </View>
+                        </View>
+                        <Pressable onPress={() => setTocVisible(false)}>
                             <IconSymbol name="xmark.circle.fill" size={24} color="#94a3b8" />
-                        </TouchableOpacity>
+                        </Pressable>
                     </View>
                     <FlatList
-                        data={toc}
+                        ref={tocFlatListRef}
+                        data={toc.filter(h => h.level <= tocMaxLevel)}
                         keyExtractor={item => item.key}
-                        renderItem={({ item, index }) => (
-                            <TouchableOpacity 
-                                className="py-3 border-b border-slate-200 dark:border-slate-800 active:bg-slate-200 dark:active:bg-slate-800 rounded-lg px-2 -mx-2"
-                                onPress={() => scrollToHeader(index)}
-                            >
-                                <Text 
-                                    className="text-slate-700 dark:text-slate-300 font-medium"
-                                    style={{ marginLeft: (item.level - 1) * 16 }}
+                        initialScrollIndex={(() => {
+                            // Find the current heading based on scroll position
+                            const filteredToc = toc.filter(h => h.level <= tocMaxLevel);
+                            let currentIndex = 0;
+                            for (let i = 0; i < toc.length; i++) {
+                                const headingY = headerPositionsRef.current[i];
+                                if (headingY !== undefined && headingY <= currentScrollY.current + 100) {
+                                    // Check if this heading is in the filtered list
+                                    const filteredIndex = filteredToc.findIndex(t => t.key === toc[i].key);
+                                    if (filteredIndex !== -1) {
+                                        currentIndex = filteredIndex;
+                                    }
+                                }
+                            }
+                            return Math.max(0, currentIndex);
+                        })()}
+                        getItemLayout={(data, index) => ({
+                            length: 49, // 估计的每项高度 (paddingVertical: 12 * 2 + borderBottom: 1 + text height)
+                            offset: 49 * index,
+                            index,
+                        })}
+                        onScrollToIndexFailed={(info) => {
+                            // Fallback if scrollToIndex fails
+                            setTimeout(() => {
+                                tocFlatListRef.current?.scrollToOffset({
+                                    offset: info.averageItemLength * info.index,
+                                    animated: true,
+                                });
+                            }, 100);
+                        }}
+                        renderItem={({ item, index }) => {
+                            // Determine if this is the current heading
+                            const originalIndex = toc.findIndex(t => t.key === item.key);
+                            const headingY = headerPositionsRef.current[originalIndex];
+                            
+                            // Find which heading contains the current scroll position
+                            let currentHeadingIndex = -1;
+                            for (let i = toc.length - 1; i >= 0; i--) {
+                                const y = headerPositionsRef.current[i];
+                                if (y !== undefined && y <= currentScrollY.current + 100) {
+                                    currentHeadingIndex = i;
+                                    break;
+                                }
+                            }
+                            
+                            // Determine if this heading should be highlighted
+                            let isCurrent = false;
+                            
+                            if (currentHeadingIndex >= 0 && headingY !== undefined) {
+                                // Find the appropriate ancestor heading based on current filter level
+                                // Start from the current heading and walk backwards to find the closest heading at or below tocMaxLevel
+                                let targetHeadingIndex = currentHeadingIndex;
+                                
+                                // If current heading level is higher than filter, find the containing heading at filter level
+                                while (targetHeadingIndex >= 0 && toc[targetHeadingIndex].level > tocMaxLevel) {
+                                    targetHeadingIndex--;
+                                }
+                                
+                                // Now find the highest level (lowest number) heading at or below tocMaxLevel that contains current position
+                                let ancestorIndex = targetHeadingIndex;
+                                for (let i = targetHeadingIndex - 1; i >= 0; i--) {
+                                    if (toc[i].level <= tocMaxLevel) {
+                                        // Check if this heading is still an ancestor (not a sibling or after current position)
+                                        const nextSameLevelIndex = toc.findIndex((h, idx) => 
+                                            idx > i && h.level <= toc[i].level
+                                        );
+                                        
+                                        if (nextSameLevelIndex === -1 || nextSameLevelIndex > currentHeadingIndex) {
+                                            // This is an ancestor
+                                            if (toc[i].level < toc[ancestorIndex].level) {
+                                                ancestorIndex = i;
+                                            }
+                                        } else {
+                                            // This heading ends before current position, stop looking
+                                            break;
+                                        }
+                                    }
+                                }
+                                
+                                isCurrent = (originalIndex === ancestorIndex);
+                            }
+                            
+                            return (
+                                <RNTouchableOpacity 
+                                    style={{
+                                        paddingVertical: 12,
+                                        borderBottomWidth: 1,
+                                        borderBottomColor: isDark ? '#1e293b' : '#e2e8f0',
+                                        paddingHorizontal: 8,
+                                        marginHorizontal: -8,
+                                        backgroundColor: isCurrent ? (isDark ? '#1e293b' : '#f1f5f9') : 'transparent',
+                                    }}
+                                    onPress={() => {
+                                        scrollToHeader(originalIndex);
+                                    }}
                                 >
-                                    {item.text}
-                                </Text>
-                            </TouchableOpacity>
-                        )}
+                                    <Text 
+                                        style={{ 
+                                            marginLeft: (item.level - 1) * 16,
+                                            color: isCurrent ? (isDark ? '#60a5fa' : '#2563eb') : (isDark ? '#cbd5e1' : '#475569'),
+                                            fontWeight: isCurrent ? 'bold' : 'normal',
+                                        }}
+                                    >
+                                        {item.text}
+                                    </Text>
+                                </RNTouchableOpacity>
+                            );
+                        }}
                     />
                 </View>
             </View>
@@ -565,17 +809,16 @@ export default function PostDetailScreen() {
             onRequestClose={() => setSettingsVisible(false)}
         >
             <View className="flex-1 justify-end">
-                <TouchableOpacity 
+                <Pressable 
                     className="absolute inset-0" 
-                    activeOpacity={1} 
                     onPress={() => setSettingsVisible(false)}
                 />
                 <View className="bg-slate-100 dark:bg-slate-900 rounded-t-2xl p-6 shadow-2xl border-t border-slate-200 dark:border-slate-800 pb-10">
                     <View className="flex-row justify-between items-center mb-6 border-b border-slate-200 dark:border-slate-800 pb-2">
                         <Text className="text-lg font-bold text-slate-900 dark:text-white">阅读设置</Text>
-                        <TouchableOpacity onPress={() => setSettingsVisible(false)}>
+                        <Pressable onPress={() => setSettingsVisible(false)}>
                             <IconSymbol name="xmark.circle.fill" size={24} color="#94a3b8" />
-                        </TouchableOpacity>
+                        </Pressable>
                     </View>
                     
                     <View className="flex-row items-center justify-between mb-4">
@@ -584,22 +827,22 @@ export default function PostDetailScreen() {
                     </View>
                     
                     <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
-                        <TouchableOpacity 
+                        <Pressable 
                             onPress={() => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10))}
                             className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                         >
                             <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                         
                         <View className="flex-1 items-center">
                              <Text className="text-slate-900 dark:text-white font-serif" style={{ fontSize: 18 * fontSizeScale }}>预览 Text</Text>
                         </View>
-                        <TouchableOpacity 
+                        <Pressable 
                             onPress={() => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10))}
                             className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                         >
                             <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
-                        </TouchableOpacity>
+                        </Pressable>
                     </View>
                 </View>
             </View>
@@ -621,12 +864,12 @@ export default function PostDetailScreen() {
                     style={{ opacity: controlsVisible ? 1 : 0 }}
                     className="w-full flex-row justify-end pt-14 px-6 absolute top-0 z-50 transition-opacity duration-300"
                 >
-                    <TouchableOpacity 
+                    <Pressable 
                         className="p-3 bg-black/40 rounded-full backdrop-blur-md"
                         onPress={() => setViewerVisible(false)}
                     >
                         <IconSymbol name="xmark" size={20} color="white" />
-                    </TouchableOpacity>
+                    </Pressable>
                 </View>
             )}
             FooterComponent={({ imageIndex }) => (
@@ -638,18 +881,18 @@ export default function PostDetailScreen() {
                         双指缩放 • 长按显隐菜单 • 左右滑动切换
                     </Text>
                     <View className="flex-row justify-center gap-8" pointerEvents={controlsVisible ? "auto" : "none"}>
-                        <TouchableOpacity 
+                        <Pressable 
                             className="p-5 bg-black/50 rounded-full backdrop-blur-md active:bg-black/70"
                             onPress={handleRotateLeft}
                         >
                             <IconSymbol name="rotate.left" size={28} color="white" />
-                        </TouchableOpacity>
-                        <TouchableOpacity 
+                        </Pressable>
+                        <Pressable 
                             className="p-5 bg-black/50 rounded-full backdrop-blur-md active:bg-black/70"
                             onPress={handleRotateRight}
                         >
                             <IconSymbol name="rotate.right" size={28} color="white" />
-                        </TouchableOpacity>
+                        </Pressable>
                     </View>
                 </View>
             )}
