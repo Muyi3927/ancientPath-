@@ -36,6 +36,8 @@ import { runOnJS } from 'react-native-reanimated';
 
 const HIGHLIGHT_STORAGE_KEY = 'bible_highlights';
 const READING_HISTORY_KEY = 'bible_reading_history';
+const SEARCH_HISTORY_KEY = 'bible_search_history';
+const MAX_SEARCH_HISTORY = 10;
 
 export default function BibleScreen() {
   const insets = useSafeAreaInsets();
@@ -65,8 +67,53 @@ export default function BibleScreen() {
   const [showBookModal, setShowBookModal] = useState(false);
   const [showChapterModal, setShowChapterModal] = useState(false);
   const [bookTab, setBookTab] = useState<'old' | 'new'>('old');
-  const [fontScale, setFontScale] = useState(1);
+  const [fontScale, setFontScale] = useState(1.1);
   const [showControls, setShowControls] = useState(true);
+
+  // Load saved font scale on component mount
+  useEffect(() => {
+    const loadFontScale = async () => {
+      try {
+        const savedScale = await AsyncStorage.getItem('bible_font_size_scale');
+        if (savedScale) {
+          setFontScale(parseFloat(savedScale));
+        }
+      } catch (e) {
+        console.log('Error loading font scale', e);
+      }
+    };
+    loadFontScale();
+  }, []);
+
+  // Load saved font scale on component mount
+  useEffect(() => {
+    const loadFontScale = async () => {
+      try {
+        const savedScale = await AsyncStorage.getItem('bible_font_size_scale');
+        if (savedScale) {
+          setFontScale(parseFloat(savedScale));
+        }
+      } catch (e) {
+        console.log('Error loading font scale', e);
+      }
+    };
+    loadFontScale();
+  }, []);
+
+  // Load saved font scale on component mount
+  useEffect(() => {
+    const loadFontScale = async () => {
+      try {
+        const savedScale = await AsyncStorage.getItem('bible_font_size_scale');
+        if (savedScale) {
+          setFontScale(parseFloat(savedScale));
+        }
+      } catch (e) {
+        console.log('Error loading font scale', e);
+      }
+    };
+    loadFontScale();
+  }, []);
   const [showVerseModal, setShowVerseModal] = useState(false);
   const [selectedVerse, setSelectedVerse] = useState<number | null>(null);
   const [highlightedVerses, setHighlightedVerses] = useState<Record<string, boolean>>({});
@@ -86,6 +133,8 @@ export default function BibleScreen() {
   const [searchResults, setSearchResults] = useState<BibleVerse[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [searchHighlightVerseId, setSearchHighlightVerseId] = useState<number | null>(null);
+  const [searchHistory, setSearchHistory] = useState<string[]>([]);
 
   const flatListRef = useRef<FlatList>(null);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -140,8 +189,14 @@ export default function BibleScreen() {
         if (highlightRaw) {
           setHighlightedVerses(JSON.parse(highlightRaw));
         }
+        
+        // 加载搜索历史
+        const searchHistoryRaw = await AsyncStorage.getItem(SEARCH_HISTORY_KEY);
+        if (searchHistoryRaw) {
+          setSearchHistory(JSON.parse(searchHistoryRaw));
+        }
       } catch (error) {
-        console.error('加载本地经文状态失败', error);
+        console.error('加载本地数据失败', error);
       }
     };
 
@@ -267,9 +322,10 @@ export default function BibleScreen() {
     }
   };
 
-  const handleAdjustFont = () => {
+  const handleAdjustFont = async () => {
     setFontScale(prev => {
       const next = prev >= 1.5 ? 1 : parseFloat((prev + 0.25).toFixed(2));
+      AsyncStorage.setItem('bible_font_size_scale', next.toString()).catch(console.error);
       return next;
     });
   };
@@ -310,6 +366,7 @@ export default function BibleScreen() {
   };
 
   const handlePrevChapter = () => {
+    setSearchHighlightVerseId(null); // 清除搜索高亮
     if (currentChapter > 1) {
       setCurrentChapter(c => c - 1);
     } else {
@@ -365,6 +422,7 @@ export default function BibleScreen() {
     }
   }, [verses]);
   const handleNextChapter = () => {
+    setSearchHighlightVerseId(null); // 清除搜索高亮
     if (currentBook && currentChapter < currentBook.ChapterNumber) {
       setCurrentChapter(c => c + 1);
     } else {
@@ -502,12 +560,24 @@ export default function BibleScreen() {
     const verseKey = getVerseKey(item);
     const isHighlighted = !!highlightedVerses[verseKey];
     const isSelected = selectedVersesForAction.has(item.VerseSN);
+    const isSearchHighlighted = searchHighlightVerseId === item.ID;
 
     return (
       <TouchableOpacity
         activeOpacity={0.7}
-        className={`flex-row mb-3 rounded-lg items-start pr-2 ${isHighlighted ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400/60' : ''}`.trim()}
-        onPress={() => onVersePress(item)}
+        className={`flex-row mb-3 rounded-lg items-start pr-2 ${
+          isSearchHighlighted 
+            ? 'bg-blue-100 dark:bg-blue-900/40 border-2 border-blue-500 shadow-lg' 
+            : isHighlighted 
+            ? 'bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-400/60' 
+            : ''
+        }`.trim()}
+        onPress={() => {
+          if (isSearchHighlighted) {
+            setSearchHighlightVerseId(null);
+          }
+          onVersePress(item);
+        }}
         onLongPress={() => onVerseLongPress(item)}
       >
         <Text
@@ -524,13 +594,18 @@ export default function BibleScreen() {
           {item.VerseSN}
         </Text>
         <Text
-          className="flex-1 text-gray-800 dark:text-gray-200 font-serif"
+          className={`flex-1 font-serif ${
+            isSearchHighlighted 
+              ? 'text-gray-900 dark:text-gray-100' 
+              : 'text-gray-800 dark:text-gray-200'
+          }`}
           style={{
             fontSize: baseFontSize,
             lineHeight: verseLineHeight,
             paddingVertical: 4,
             paddingRight: 6,
             paddingLeft: 4,
+            fontWeight: isSearchHighlighted ? '600' : 'normal',
             textDecorationLine: isSelected ? 'underline' : 'none',
             textDecorationStyle: 'dashed',
             textDecorationColor: isDark ? '#60a5fa' : '#93c5fd',
@@ -545,6 +620,46 @@ export default function BibleScreen() {
   const oldTestamentBooks = books.filter(b => b.NewOrOld === 0);
   const newTestamentBooks = books.filter(b => b.NewOrOld === 1);
 
+  // 保存搜索历史
+  const saveSearchHistory = async (query: string) => {
+    try {
+      const trimmedQuery = query.trim();
+      if (!trimmedQuery) return;
+      
+      // 去重并添加到历史记录开头
+      const updatedHistory = [
+        trimmedQuery,
+        ...searchHistory.filter(item => item !== trimmedQuery)
+      ].slice(0, MAX_SEARCH_HISTORY);
+      
+      setSearchHistory(updatedHistory);
+      await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updatedHistory));
+    } catch (error) {
+      console.error('保存搜索历史失败', error);
+    }
+  };
+
+  // 删除单个搜索历史
+  const removeSearchHistoryItem = async (query: string) => {
+    try {
+      const updatedHistory = searchHistory.filter(item => item !== query);
+      setSearchHistory(updatedHistory);
+      await AsyncStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(updatedHistory));
+    } catch (error) {
+      console.error('删除搜索历史失败', error);
+    }
+  };
+
+  // 清空所有搜索历史
+  const clearSearchHistory = async () => {
+    try {
+      setSearchHistory([]);
+      await AsyncStorage.removeItem(SEARCH_HISTORY_KEY);
+    } catch (error) {
+      console.error('清空搜索历史失败', error);
+    }
+  };
+
   const performSearch = async () => {
     if (!searchQuery.trim()) {
        setHasSearched(false);
@@ -556,6 +671,8 @@ export default function BibleScreen() {
     try {
         const results = await searchVerses(searchQuery);
         setSearchResults(results);
+        // 保存搜索历史
+        await saveSearchHistory(searchQuery);
     } catch (e) {
         console.error(e);
         Alert.alert('搜索失败', '请稍后再试');
@@ -574,6 +691,7 @@ export default function BibleScreen() {
                     setCurrentBook(book);
                     setCurrentChapter(item.ChapterSN);
                     setPendingScrollVerse(item.VerseSN);
+                    setSearchHighlightVerseId(item.ID);
                     setShowSearchModal(false);
                 }
             }}
@@ -658,7 +776,11 @@ export default function BibleScreen() {
                     data={verses}
                     renderItem={renderVerse}
                     keyExtractor={item => item.ID.toString()}
-                    extraData={{ selectedVerse, highlightedVerses }}
+                    extraData={{ selectedVerse, highlightedVerses, searchHighlightVerseId, selectedVersesForAction }}
+                    initialNumToRender={15}
+                    maxToRenderPerBatch={10}
+                    windowSize={11}
+                    removeClippedSubviews={Platform.OS === 'android'}
                     contentContainerStyle={{
                     paddingHorizontal: 0,
                     paddingBottom: 80 + safeBottom, // Add extra padding for the bottom bar
@@ -795,6 +917,7 @@ export default function BibleScreen() {
                       key={`${item.bookSN}-${item.chapter}-${index}`}
                       className="flex-row items-center justify-between py-3 border-b border-gray-200 dark:border-gray-800"
                       onPress={() => {
+                        setSearchHighlightVerseId(null);
                         if (currentBook?.SN !== item.bookSN) {
                            const book = books.find(b => b.SN === item.bookSN);
                            if (book) setCurrentBook(book);
@@ -887,6 +1010,7 @@ export default function BibleScreen() {
                       key={book.SN}
                       className={`w-[30%] mb-3 p-3 rounded-xl items-center border ${currentBook?.SN === book.SN ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-400' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-600'}`}
                       onPress={() => {
+                        setSearchHighlightVerseId(null);
                         setCurrentBook(book);
                         setShowBookModal(false);
                         // Transition to chapter selection
@@ -925,6 +1049,7 @@ export default function BibleScreen() {
                       key={num}
                       className={`w-14 h-14 rounded-2xl items-center justify-center border ${currentChapter === num ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-300' : 'bg-white border-gray-200 dark:border-gray-800 dark:border-gray-600'}`}
                       onPress={() => {
+                        setSearchHighlightVerseId(null);
                         setCurrentChapter(num);
                         setShowChapterModal(false);
                       }}
@@ -1084,7 +1209,11 @@ export default function BibleScreen() {
                   
                   <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
                       <TouchableOpacity 
-                          onPress={() => setFontScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10))}
+                          onPress={() => setFontScale(s => {
+                            const newScale = Math.max(0.8, Math.round((s - 0.1) * 10) / 10);
+                            AsyncStorage.setItem('bible_font_size_scale', newScale.toString()).catch(console.error);
+                            return newScale;
+                          })}
                           className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                       >
                           <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
@@ -1095,7 +1224,11 @@ export default function BibleScreen() {
                       </View>
 
                       <TouchableOpacity 
-                          onPress={() => setFontScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10))}
+                          onPress={() => setFontScale(s => {
+                            const newScale = Math.min(2.0, Math.round((s + 0.1) * 10) / 10);
+                            AsyncStorage.setItem('bible_font_size_scale', newScale.toString()).catch(console.error);
+                            return newScale;
+                          })}
                           className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                       >
                           <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
@@ -1131,9 +1264,10 @@ export default function BibleScreen() {
                         autoFocus
                         clearButtonMode="while-editing"
                     />
-                     {searchQuery.length > 0 && Platform.OS !== 'ios' && (
+                     {(searchQuery.length > 0 || searchResults.length > 0) && Platform.OS !== 'ios' && (
                         <TouchableOpacity onPress={() => {
                             setSearchQuery('');
+                            setSearchResults([]);
                             setHasSearched(false);
                         }}>
                              <IconSymbol name="xmark.circle.fill" size={16} color={isDark ? '#6b7280' :'#9ca3af'} />
@@ -1147,18 +1281,104 @@ export default function BibleScreen() {
              
              {isSearching ? (
                  <ActivityIndicator size="large" color="#2563eb" className="mt-10" />
-             ) : (
+             ) : searchResults.length > 0 ? (
                 <FlatList
                     data={searchResults}
                     keyExtractor={item => `${item.VolumeSN}-${item.ChapterSN}-${item.VerseSN}`}
                     renderItem={renderSearchResult}
-                    ListEmptyComponent={
-                        searchQuery.length > 0 && !isSearching && hasSearched ? (
-                            <Text className="text-center text-gray-500 mt-10">未找到相关经文</Text>
-                        ) : null
-                    }
                     keyboardShouldPersistTaps="handled" 
                 />
+             ) : hasSearched && searchQuery.length > 0 ? (
+                <View className="flex-1 items-center justify-center">
+                    <Text className="text-center text-gray-500 text-base">未找到相关经文</Text>
+                </View>
+             ) : (
+                <View className="flex-1">
+                    {/* 搜索历史 */}
+                    {searchHistory.length > 0 && (
+                        <View className="mb-4">
+                            <View className="flex-row items-center justify-between mb-3">
+                                <Text className="text-sm font-bold text-gray-500 dark:text-gray-400 uppercase">
+                                    搜索历史
+                                </Text>
+                                <TouchableOpacity 
+                                    onPress={() => {
+                                        Alert.alert(
+                                            '清空搜索历史',
+                                            '确定要清空所有搜索历史吗？',
+                                            [
+                                                { text: '取消', style: 'cancel' },
+                                                { 
+                                                    text: '清空', 
+                                                    style: 'destructive',
+                                                    onPress: clearSearchHistory 
+                                                }
+                                            ]
+                                        );
+                                    }}
+                                    className="px-2 py-1"
+                                >
+                                    <Text className="text-sm text-red-600 dark:text-red-400">清空</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            <View className="flex-row flex-wrap gap-2">
+                                {searchHistory.map((historyItem, index) => (
+                                    <TouchableOpacity
+                                        key={index}
+                                        onPress={async () => {
+                                            setSearchQuery(historyItem);
+                                            setIsSearching(true);
+                                            setHasSearched(true);
+                                            Keyboard.dismiss();
+                                            try {
+                                                const results = await searchVerses(historyItem);
+                                                setSearchResults(results);
+                                            } catch (e) {
+                                                console.error(e);
+                                                Alert.alert('搜索失败', '请稍后再试');
+                                            } finally {
+                                                setIsSearching(false);
+                                            }
+                                        }}
+                                        onLongPress={() => {
+                                            Alert.alert(
+                                                '删除搜索记录',
+                                                `确定要删除 "${historyItem}" 吗？`,
+                                                [
+                                                    { text: '取消', style: 'cancel' },
+                                                    { 
+                                                        text: '删除', 
+                                                        style: 'destructive',
+                                                        onPress: () => removeSearchHistoryItem(historyItem)
+                                                    }
+                                                ]
+                                            );
+                                        }}
+                                        className="flex-row items-center bg-gray-100 dark:bg-gray-800 rounded-full px-3 py-2"
+                                    >
+                                        <IconSymbol name="clock" size={14} color={isDark ? '#9ca3af' : '#6b7280'} />
+                                        <Text className="ml-1.5 text-sm text-gray-700 dark:text-gray-300">
+                                            {historyItem}
+                                        </Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </View>
+                            
+                            <Text className="text-xs text-gray-400 dark:text-gray-600 mt-3 text-center">
+                                点击搜索，长按删除
+                            </Text>
+                        </View>
+                    )}
+                    
+                    {/* 搜索提示 */}
+                    <View className="flex-1 items-center justify-center">
+                        <IconSymbol name="magnifyingglass" size={48} color={isDark ? '#374151' : '#e5e7eb'} />
+                        <Text className="text-gray-400 dark:text-gray-600 mt-4 text-center px-8">
+                            {searchHistory.length > 0 ? '输入关键词搜索经文' : '输入关键词搜索经文\n搜索记录会自动保存'}
+                        </Text>
+                    </View>
+                </View>
              )}
           </View>
         </SafeAreaView>

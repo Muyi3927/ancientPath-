@@ -1,17 +1,25 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Text, View, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, SafeAreaView, useColorScheme, Platform, StatusBar, useWindowDimensions } from 'react-native';
+import { Text, View, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, useColorScheme, Platform, StatusBar, useWindowDimensions } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { Link, useLocalSearchParams, useFocusEffect } from 'expo-router';
+import { Link, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
 import { getPosts, getCategories, getCachedPosts, getCachedCategories } from '../../services/api';
 import { BlogPost, Category } from '../../types';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { getReadPostIds } from '../../services/readingHistory';
+import { checkForNewPosts, setupNotificationResponseHandler, clearAllNotifications, initializeNotifications } from '../../services/notificationService';
+import { getFavorites } from '../../services/favoriteService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { SkeletonPost } from '../../components/SkeletonPost';
 
 export default function HomeScreen() {
+  const router = useRouter();
   const { categoryId } = useLocalSearchParams();
   const [allPosts, setAllPosts] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [readPostIds, setReadPostIds] = useState<Set<number>>(new Set());
+  const [favoriteIds, setFavoriteIds] = useState<Set<number>>(new Set());
+  const [offlinePosts, setOfflinePosts] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,14 +29,19 @@ export default function HomeScreen() {
   const carouselRef = useRef<FlatList>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
 
-  const fetchPosts = async () => {
+  // 初始化通知服务
+  useEffect(() => {
+    initializeNotifications();
+  }, []);
+
+  const fetchPosts = async (force = false) => {
     try {
       setError(null);
       
       // Fetch ALL posts for client-side filtering
       const [postsData, categoriesData] = await Promise.all([
-        getPosts(),
-        getCategories()
+        getPosts(undefined, undefined, force),
+        getCategories(force)
       ]);
       
       const filteredPosts = postsData.filter(p => !p.tags.includes('__draft__'));
@@ -89,9 +102,19 @@ export default function HomeScreen() {
 
       // 2. 后台刷新数据 (这可能会花费较长时间如果服务器冷启动)
       await fetchPosts();
+      
+      // 3. 检查新文章并发送通知
+      checkForNewPosts().catch(console.error);
     };
 
     init();
+    
+    // 设置通知响应处理
+    const cleanup = setupNotificationResponseHandler((postId) => {
+      router.push(`/post/${postId}`);
+    });
+    
+    return cleanup;
   }, []);
 
   useFocusEffect(
@@ -99,12 +122,36 @@ export default function HomeScreen() {
       getReadPostIds().then(ids => {
         setReadPostIds(new Set(ids));
       });
+      
+      getFavorites().then(ids => {
+        setFavoriteIds(new Set(ids));
+      });
+      
+      // 检查离线缓存的文章
+      checkOfflinePosts();
+      
+      // 清除通知角标
+      clearAllNotifications().catch(console.error);
     }, [])
   );
+  
+  const checkOfflinePosts = async () => {
+    try {
+      const keys = await AsyncStorage.getAllKeys();
+      const postCacheKeys = keys.filter(key => key.startsWith('blog_cache_post_'));
+      const cachedPostIds = postCacheKeys.map(key => {
+        const id = key.replace('blog_cache_post_', '');
+        return parseInt(id, 10);
+      }).filter(id => !isNaN(id));
+      setOfflinePosts(new Set(cachedPostIds));
+    } catch (error) {
+      console.error('检查离线缓存失败', error);
+    }
+  };
 
   const onRefresh = () => {
     setRefreshing(true);
-    fetchPosts();
+    fetchPosts(true);
   };
 
   const filteredPosts = useMemo(() => {
@@ -152,6 +199,8 @@ export default function HomeScreen() {
 
   const renderItem = ({ item }: { item: BlogPost }) => {
     const isRead = readPostIds.has(item.id);
+    const isFavorited = favoriteIds.has(item.id);
+    const isOffline = offlinePosts.has(item.id);
     return (
     <Link href={`/post/${item.id}`} asChild>
       <TouchableOpacity className={`bg-white dark:bg-slate-900 p-4 mb-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mx-4 active:opacity-70 ${isRead ? 'opacity-80 bg-slate-50 dark:bg-slate-900/50' : ''}`}>
@@ -173,6 +222,20 @@ export default function HomeScreen() {
                     </Text>
                 </View>
             ) : null}
+            {/* 收藏和离线标识 */}
+            <View className="absolute top-2 right-2 flex-row gap-1">
+              {isFavorited && (
+                <View className="bg-red-500/90 px-2 py-1 rounded-md shadow-sm backdrop-blur-md">
+                  <IconSymbol name="heart.fill" size={12} color="white" />
+                </View>
+              )}
+              {isOffline && (
+                <View className="bg-green-500/90 px-2 py-1 rounded-md shadow-sm backdrop-blur-md flex-row items-center">
+                  <IconSymbol name="arrow.down.circle.fill" size={10} color="white" />
+                  <Text className="text-white text-xs font-bold ml-1">离线</Text>
+                </View>
+              )}
+            </View>
         </View>
 
         <Text className={`text-lg font-bold mb-2 leading-tight ${isRead ? 'text-slate-600 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>{item.title}</Text>
@@ -193,6 +256,7 @@ export default function HomeScreen() {
           <Text className="text-xs text-slate-400 dark:text-slate-500 font-medium">
             {new Date(item.createdAt).toLocaleDateString()}
             {isRead && <Text className="text-slate-400 ml-2"> • 已读</Text>}
+            {isFavorited && <Text className="text-red-500 ml-2"> • 已收藏</Text>}
           </Text>
           <View className="flex-row items-center">
             <Text className={`text-xs font-bold mr-1 ${isRead ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'}`}>阅读更多</Text>
@@ -220,6 +284,15 @@ export default function HomeScreen() {
           </TouchableOpacity>
         </Link>
       </View>
+
+      {/* Search Bar */}
+      <TouchableOpacity 
+        className="mx-4 mb-4 bg-white dark:bg-slate-900 rounded-full px-4 py-3 flex-row items-center shadow-sm border border-slate-200 dark:border-slate-700"
+        onPress={() => router.push('/search')}
+      >
+        <IconSymbol name="magnifyingglass" size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
+        <Text className="ml-2 text-slate-500 dark:text-slate-400">搜索讲道、标签...</Text>
+      </TouchableOpacity>
 
       {/* Featured Carousel - Single View Implementation */}
       {!categoryId && featuredPosts.length > 0 && (
@@ -308,14 +381,14 @@ export default function HomeScreen() {
   if (loading && !refreshing && allPosts.length === 0) {
     return (
       <SafeAreaView className="flex-1 bg-slate-100 dark:bg-black">
-        {renderHeader()}
-        <View className="flex-1 items-center justify-center">
-          <ActivityIndicator size="large" color="#2563eb" />
-          <Text className="mt-4 text-slate-500 dark:text-slate-400 font-medium">正在加载讲道...</Text>
-          <Text className="mt-2 text-xs text-slate-400 dark:text-slate-500 text-center px-10">
-            首次启动可能需要唤醒服务器，请耐心等待...
-          </Text>
-        </View>
+        <FlatList
+          data={[1, 2, 3, 4]}
+          renderItem={() => <SkeletonPost />}
+          keyExtractor={(item) => item.toString()}
+          ListHeaderComponent={renderHeader}
+          contentContainerStyle={{ paddingBottom: 20 }}
+          scrollEnabled={false} 
+        />
       </SafeAreaView>
     );
   }

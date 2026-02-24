@@ -17,6 +17,8 @@ export const Bible: React.FC = () => {
   const [version, setVersion] = useState<BibleVersion>('cuv');
   // Default font size scale increased to 1.2
   const [fontSizeScale, setFontSizeScale] = useState(1.2);
+  const [highlightedVerseId, setHighlightedVerseId] = useState<number | null>(null);
+  const verseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
   // Font Helpers
   const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
@@ -53,12 +55,16 @@ export const Bible: React.FC = () => {
     if (currentBook) {
       setLoading(true);
       getVerses(currentBook.SN, currentChapter, version)
-        .then(setVerses)
+        .then(verses => {
+          setVerses(verses);
+          // 如果不是高亮跳转导致的章节切换，清除高亮
+          // 高亮会在点击搜索结果时设置，并在延迟后滚动
+        })
         .catch(console.error)
         .finally(() => {
           setLoading(false);
-          // Scroll to top when chapter changes
-          if (versesContainerRef.current) {
+          // 只有在没有高亮时才滚动到顶部
+          if (!highlightedVerseId && versesContainerRef.current) {
             versesContainerRef.current.scrollTop = 0;
           }
         });
@@ -83,7 +89,6 @@ export const Bible: React.FC = () => {
   const handleBookSelect = (book: BibleBook) => {
     setCurrentBook(book);
     setCurrentChapter(1);
-    setSearchResults([]);
     if (window.innerWidth < 768) {
         setSidebarOpen(false);
         setModalView('chapters'); // Switch to chapter selection on mobile
@@ -91,12 +96,14 @@ export const Bible: React.FC = () => {
   };
 
   const handleChapterSelect = (chapter: number) => {
+      setHighlightedVerseId(null); // 清除高亮
       setCurrentChapter(chapter);
       setShowBookModal(false);
       setModalView('books'); // Reset for next time
   };
 
   const handlePrevChapter = () => {
+    setHighlightedVerseId(null); // 清除高亮
     if (currentChapter > 1) {
       setCurrentChapter(c => c - 1);
     } else if (currentBook && currentBook.SN > 1) {
@@ -109,6 +116,7 @@ export const Bible: React.FC = () => {
   };
 
   const handleNextChapter = () => {
+    setHighlightedVerseId(null); // 清除高亮
     if (currentBook && currentChapter < currentBook.ChapterNumber) {
       setCurrentChapter(c => c + 1);
     } else if (currentBook && currentBook.SN < 66) {
@@ -173,18 +181,30 @@ export const Bible: React.FC = () => {
             <input
               type="text"
               placeholder="搜索经文..."
-              className="w-full pl-9 pr-4 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+              className="w-full pl-9 pr-9 py-2 rounded-lg bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
             <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+            {(searchQuery || searchResults.length > 0) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  setSearchResults([]);
+                }}
+                className="absolute right-3 top-2.5 hover:bg-gray-200 dark:hover:bg-gray-600 rounded-full p-0.5"
+              >
+                <X className="w-4 h-4 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200" />
+              </button>
+            )}
           </form>
         </div>
         
         <div className="flex-1 overflow-y-auto p-2">
           {searchResults.length > 0 ? (
              <div className="space-y-1">
-               <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">搜索结果</div>
+               <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase">搜索结果 ({searchResults.length})</div>
                {searchResults.map(verse => {
                   const book = books.find(b => b.SN === verse.VolumeSN);
                   return (
@@ -194,7 +214,14 @@ export const Bible: React.FC = () => {
                               if (book) {
                                   setCurrentBook(book);
                                   setCurrentChapter(verse.ChapterSN);
-                                  setSearchResults([]);
+                                  setHighlightedVerseId(verse.ID);
+                                  // 延迟滚动，等待章节加载完成
+                                  setTimeout(() => {
+                                      const verseElement = verseRefs.current.get(verse.ID);
+                                      if (verseElement) {
+                                          verseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                      }
+                                  }, 300);
                               }
                           }}
                           className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-sm"
@@ -340,7 +367,18 @@ export const Bible: React.FC = () => {
         <div 
           ref={versesContainerRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-36 bg-white dark:bg-gray-900 cursor-pointer"
-          onClick={() => setMenuVisible(!isMenuVisible)}
+          onClick={(e) => {
+            // 如果点击的是经文容器本身（不是经文内容），则清除高亮
+            if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('max-w-3xl')) {
+              if (highlightedVerseId) {
+                setHighlightedVerseId(null);
+              } else {
+                setMenuVisible(!isMenuVisible);
+              }
+            } else {
+              setMenuVisible(!isMenuVisible);
+            }
+          }}
           onTouchStart={onTouchStart}
           onTouchMove={onTouchMove}
           onTouchEnd={onTouchEnd}
@@ -351,17 +389,44 @@ export const Bible: React.FC = () => {
             </div>
           ) : (
             <div className="max-w-3xl mx-auto space-y-1 pb-20">
-              {verses.map(verse => (
-                <div key={verse.ID} className="flex group hover:bg-gray-50 dark:hover:bg-gray-800/50 p-1 px-2 rounded-lg transition-colors">
-                  <span className="text-xs text-gray-400 w-6 md:w-8 pt-2 select-none flex-shrink-0">{verse.VerseSN}</span>
-                  <p 
-                    className="text-gray-800 dark:text-gray-200 leading-relaxed font-serif flex-1 transition-all duration-200"
-                    style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}
+              {verses.map(verse => {
+                const isHighlighted = highlightedVerseId === verse.ID;
+                return (
+                  <div 
+                    key={verse.ID} 
+                    ref={(el) => {
+                      if (el) {
+                        verseRefs.current.set(verse.ID, el);
+                      } else {
+                        verseRefs.current.delete(verse.ID);
+                      }
+                    }}
+                    onClick={(e) => {
+                      if (isHighlighted) {
+                        e.stopPropagation();
+                        setHighlightedVerseId(null);
+                      }
+                    }}
+                    className={`flex group p-1 px-2 rounded-lg transition-all duration-500 ${
+                      isHighlighted 
+                        ? 'bg-yellow-100 dark:bg-yellow-900/30 shadow-lg cursor-pointer' 
+                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    }`}
                   >
-                    {verse.Lection}
-                  </p>
-                </div>
-              ))}
+                    <span className="text-xs text-gray-400 w-6 md:w-8 pt-2 select-none flex-shrink-0">{verse.VerseSN}</span>
+                    <p 
+                      className={`leading-relaxed font-serif flex-1 transition-all duration-200 ${
+                        isHighlighted 
+                          ? 'text-gray-900 dark:text-gray-100 font-medium' 
+                          : 'text-gray-800 dark:text-gray-200'
+                      }`}
+                      style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}
+                    >
+                      {verse.Lection}
+                    </p>
+                  </div>
+                );
+              })}
 
               {/* Bottom Navigation Buttons */}
               <div className="flex justify-between items-center mt-8 pt-4 border-t border-gray-100 dark:border-gray-800">
@@ -498,12 +563,24 @@ export const Bible: React.FC = () => {
                     <input
                         type="text"
                         placeholder="输入关键词..."
-                        className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
+                        className="w-full pl-10 pr-10 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 border-none focus:ring-2 focus:ring-blue-500 outline-none dark:text-white"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         autoFocus
                     />
                     <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+                    {(searchQuery || searchResults.length > 0) && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery('');
+                          setSearchResults([]);
+                        }}
+                        className="absolute right-3 top-3.5 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full p-0.5"
+                      >
+                        <X className="w-5 h-5 text-gray-400" />
+                      </button>
+                    )}
                 </form>
             </div>
 
@@ -524,8 +601,15 @@ export const Bible: React.FC = () => {
                                         if (book) {
                                             setCurrentBook(book);
                                             setCurrentChapter(verse.ChapterSN);
-                                            setSearchResults([]);
+                                            setHighlightedVerseId(verse.ID);
                                             setShowSearchModal(false);
+                                            // 延迟滚动，等待章节加载完成
+                                            setTimeout(() => {
+                                                const verseElement = verseRefs.current.get(verse.ID);
+                                                if (verseElement) {
+                                                    verseElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }
+                                            }, 300);
                                         }
                                     }}
                                     className="w-full text-left p-3.5 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800"

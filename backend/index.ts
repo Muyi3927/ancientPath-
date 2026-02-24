@@ -411,8 +411,7 @@ app.get('/api/bible/search', async (c) => {
       SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection 
       FROM Bible 
       WHERE Lection LIKE ? AND Version = ? 
-      ORDER BY VolumeSN ASC, ChapterSN ASC, VerseSN ASC 
-      LIMIT 100
+      ORDER BY VolumeSN ASC, ChapterSN ASC, VerseSN ASC
     `;
     const { results } = await c.env.DB.prepare(query).bind(`%${q}%`, version).all();
     return c.json(results);

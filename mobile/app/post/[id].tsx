@@ -1,16 +1,20 @@
-import { useLocalSearchParams, Stack } from 'expo-router';
+import { useLocalSearchParams, Stack, useRouter } from 'expo-router';
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent, Platform, Pressable, TouchableOpacity as RNTouchableOpacity } from 'react-native';
+import { View, Text, ScrollView, ActivityIndicator, useWindowDimensions, useColorScheme, TouchableOpacity, Modal, FlatList, NativeSyntheticEvent, NativeScrollEvent, Platform, Pressable, TouchableOpacity as RNTouchableOpacity, Alert } from 'react-native';
 import { Image } from 'expo-image';
 import RenderHtml, { HTMLElementModel, HTMLContentModel } from 'react-native-render-html';
 import { marked } from 'marked';
-import { getPostById, getCategories } from '../../services/api';
+import { getPostById, getCategories, getCachedPosts } from '../../services/api';
 import { BlogPost, Category } from '../../types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import AudioPlayer from '../../components/AudioPlayer';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { markPostAsRead, saveReadingProgress, getReadingProgress } from '../../services/readingHistory';
+import { markPostAsRead, saveReadingProgress, getReadingProgress, incrementPostView } from '../../services/readingHistory';
 import ImageView from "react-native-image-viewing";
 import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
+import { isFavorite, toggleFavorite, getFavorites } from '../../services/favoriteService';
+import { getHighlights, addHighlight, removeHighlight, type Highlight } from '../../services/highlightService';
+import * as Clipboard from 'expo-clipboard';
 
 const HYMN_FIXED_COVER = "https://media.ancientpath.dpdns.org/images/Hymns/hymncover.webp";
 
@@ -23,14 +27,31 @@ const customHTMLElementModels = {
 
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
+  const router = useRouter();
   const [post, setPost] = useState<BlogPost | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [newerPostId, setNewerPostId] = useState<number | null>(null);
+  const [olderPostId, setOlderPostId] = useState<number | null>(null);
   const { width } = useWindowDimensions();
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   
-  const [fontSizeScale, setFontSizeScale] = useState(1.0);
+  const [fontSizeScale, setFontSizeScale] = useState(1.1);
+
+  useEffect(() => {
+    AsyncStorage.getItem('article_font_size_scale').then(val => {
+      if (val) setFontSizeScale(parseFloat(val));
+    });
+  }, []);
+
+  const changeFontSize = (delta: number) => {
+      setFontSizeScale(prev => {
+          const newState = Math.max(0.8, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
+          AsyncStorage.setItem('article_font_size_scale', newState.toString());
+          return newState;
+      });
+  };
   
   const [tocVisible, setTocVisible] = useState(false);
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -50,6 +71,67 @@ export default function PostDetailScreen() {
   const htmlContainerYRef = useRef(0);
   const [initialScrollY, setInitialScrollY] = useState(0);
   const currentScrollY = useRef(0);
+  
+  const [isFavorited, setIsFavorited] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [showHighlightModal, setShowHighlightModal] = useState(false);
+  const [selectedText, setSelectedText] = useState('');
+  const [showImageGuide, setShowImageGuide] = useState(false);
+
+  useEffect(() => {
+    const loadImageGuideState = async () => {
+      try {
+        const hasSeenGuide = await AsyncStorage.getItem('has_seen_image_guide');
+        setShowImageGuide(hasSeenGuide !== 'true');
+      } catch (e) {
+        console.log('Error loading image guide state', e);
+        setShowImageGuide(true);
+      }
+    };
+    loadImageGuideState();
+  }, []);
+
+  const hideImageGuide = async () => {
+    setShowImageGuide(false);
+    try {
+      await AsyncStorage.setItem('has_seen_image_guide', 'true');
+    } catch (e) {
+      console.log('Error saving image guide state', e);
+    }
+  };
+
+  useEffect(() => {
+    const calculateNeighbors = async () => {
+      if (!id) return;
+      
+      const allPosts = await getCachedPosts();
+      if (!allPosts) return;
+      
+      const validPosts = allPosts.filter(p => !p.tags.includes('__draft__'));
+      const activeId = Number(id);
+      const index = validPosts.findIndex(p => p.id === activeId);
+      
+      if (index === -1) return;
+      
+      // Index - 1 is newer (if sorted desc)
+      if (index > 0) {
+        setNewerPostId(validPosts[index - 1].id);
+      } else {
+        setNewerPostId(null);
+      }
+      
+      // Index + 1 is older (if sorted desc)
+      if (index < validPosts.length - 1) {
+        setOlderPostId(validPosts[index + 1].id);
+      } else {
+        setOlderPostId(null);
+      }
+    };
+    
+    calculateNeighbors();
+  }, [id]);
 
   const isHymn = useMemo(() => {
     if (!post || categories.length === 0) return false;
@@ -112,6 +194,11 @@ export default function PostDetailScreen() {
         return (
             <Pressable 
                 onPress={() => {
+                   // Hide guide on first image tap
+                   if (showImageGuide) {
+                       hideImageGuide();
+                   }
+                   
                    // If found in gallery, open at index; otherwise fallback to single image view
                    if (index !== -1) {
                        setViewerIndex(index);
@@ -135,10 +222,12 @@ export default function PostDetailScreen() {
                         }
                     }}
                 />
-                <View className="absolute top-2 left-2 bg-black/50 px-3 py-1.5 rounded-full flex-row items-center backdrop-blur-sm">
-                    <IconSymbol name="magnifyingglass" size={12} color="white" />
-                    <Text className="text-white text-xs ml-1.5 font-medium">点击图片查看大图</Text>
-                </View>
+                {showImageGuide && (
+                  <View className="absolute top-2 left-2 bg-black/50 px-3 py-1.5 rounded-full flex-row items-center backdrop-blur-sm">
+                      <IconSymbol name="magnifyingglass" size={12} color="white" />
+                      <Text className="text-white text-xs ml-1.5 font-medium">点击图片查看大图</Text>
+                  </View>
+                )}
             </Pressable>
         );
     };
@@ -152,10 +241,10 @@ export default function PostDetailScreen() {
         h6: HeadingRenderer,
         img: ImageRenderer
     };
-  }, [toc, isDark, originalImageUrls]);
+  }, [toc, isDark, originalImageUrls, showImageGuide]);
 
   // Define Stack.Screen here to ensure title is set even during loading
-  const stackScreen = (
+  const stackScreen = useMemo(() => (
     <Stack.Screen 
         options={{ 
           title: isHymn ? '诗歌详情' : '讲道详情',
@@ -169,6 +258,20 @@ export default function PostDetailScreen() {
           },
           headerRight: () => (
             <View className="flex-row">
+                <Pressable 
+                  onPress={async () => {
+                    await toggleFavorite(Number(id));
+                    const favorites = await getFavorites();
+                    setIsFavorited(favorites.includes(Number(id)));
+                  }} 
+                  className="mr-3"
+                >
+                    <IconSymbol 
+                      name={isFavorited ? "heart.fill" : "heart"} 
+                      size={24} 
+                      color={isFavorited ? '#ef4444' : (isDark ? '#fff' : '#000')} 
+                    />
+                </Pressable>
                 <Pressable onPress={() => setSettingsVisible(true)} className="mr-4">
                     <IconSymbol name="textformat.size" size={24} color={isDark ? '#fff' : '#000'} />
                 </Pressable>
@@ -176,7 +279,7 @@ export default function PostDetailScreen() {
           )
         }} 
       />
-  );
+  ), [isHymn, isDark, isFavorited, id]);
 
   useEffect(() => {
     if (id) {
@@ -184,6 +287,13 @@ export default function PostDetailScreen() {
       
       // Mark as read
       markPostAsRead(postId);
+      incrementPostView(postId);
+
+      // Check if favorited
+      isFavorite(postId).then(setIsFavorited);
+      
+      // Load highlights
+      getHighlights(postId).then(setHighlights);
 
       // Get reading progress
       getReadingProgress(postId).then(y => {
@@ -267,12 +377,62 @@ export default function PostDetailScreen() {
   const handleScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (id) {
         const y = event.nativeEvent.contentOffset.y;
+        const contentHeight = event.nativeEvent.contentSize.height;
+        const scrollViewHeight = event.nativeEvent.layoutMeasurement.height;
+        
         currentScrollY.current = y;
+        
+        // 计算阅读进度百分比
+        const progress = contentHeight > scrollViewHeight 
+          ? (y / (contentHeight - scrollViewHeight)) * 100 
+          : 0;
+        setScrollProgress(Math.min(100, Math.max(0, progress)));
+        
         if (y > 0) {
             saveReadingProgress(Number(id), y);
         }
     }
   }, [id]);
+  
+  const handleToggleFavorite = useCallback(async () => {
+    if (!id) return;
+    try {
+      const newState = await toggleFavorite(Number(id));
+      setIsFavorited(newState);
+      Alert.alert(newState ? '已收藏' : '已取消收藏');
+    } catch (error) {
+      Alert.alert('操作失败', '请稍后再试');
+    }
+  }, [id]);
+  
+  const handleAddHighlight = async (text: string) => {
+    if (!id || !text.trim()) return;
+    try {
+      await addHighlight(Number(id), text, '#fef08a');
+      const updatedHighlights = await getHighlights(Number(id));
+      setHighlights(updatedHighlights);
+      Alert.alert('已添加高亮');
+    } catch (error) {
+      Alert.alert('添加高亮失败');
+    }
+  };
+  
+  const handleRemoveHighlight = async (highlightId: string) => {
+    if (!id) return;
+    try {
+      await removeHighlight(Number(id), highlightId);
+      const updatedHighlights = await getHighlights(Number(id));
+      setHighlights(updatedHighlights);
+      Alert.alert('已删除高亮');
+    } catch (error) {
+      Alert.alert('删除高亮失败');
+    }
+  };
+  
+  const handleCopyHighlight = async (text: string) => {
+    await Clipboard.setStringAsync(text);
+    Alert.alert('已复制到剪贴板');
+  };
 
   // Scroll to initial position after content is ready
   useEffect(() => {
@@ -550,6 +710,16 @@ export default function PostDetailScreen() {
     <>
       {stackScreen}
       <View className="flex-1 bg-white dark:bg-black">
+        {/* Progress Bar */}
+        <View className="absolute top-0 left-0 right-0 z-50">
+          <View className="h-1 bg-gray-200 dark:bg-gray-800">
+            <View 
+              className="h-full bg-blue-600 dark:bg-blue-500" 
+              style={{ width: `${scrollProgress}%` }}
+            />
+          </View>
+        </View>
+        
         <ScrollView 
             ref={scrollViewRef}
             className="flex-1 bg-white dark:bg-black"
@@ -615,6 +785,35 @@ export default function PostDetailScreen() {
                 enableExperimentalMarginCollapsing={true}
                 systemFonts={[Platform.OS === 'ios' ? 'San Francisco' : 'Roboto', 'monospace', 'serif']}
                 />
+            </View>
+
+            {/* Nav Buttons */}
+            <View className="flex-row justify-between px-4 pb-8 mb-8 border-t border-slate-100 dark:border-slate-800 pt-6">
+                {newerPostId ? (
+                <TouchableOpacity 
+                    onPress={() => router.push(`/post/${newerPostId}`)}
+                    className="flex-row items-center bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-4 py-3 rounded-xl flex-1 mr-2 shadow-sm"
+                >
+                    <IconSymbol name="chevron.left" size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                    <View className="ml-2">
+                        <Text className="text-xs text-slate-400 dark:text-slate-500">上一篇</Text>
+                        <Text className="text-slate-700 dark:text-slate-300 font-medium" numberOfLines={1}>较新的文章</Text>
+                    </View>
+                </TouchableOpacity>
+                ) : <View className="flex-1 mr-2" />}
+                
+                {olderPostId ? (
+                <TouchableOpacity 
+                    onPress={() => router.push(`/post/${olderPostId}`)}
+                    className="flex-row items-center justify-end bg-slate-50 dark:bg-slate-900 border border-slate-100 dark:border-slate-800 px-4 py-3 rounded-xl flex-1 ml-2 shadow-sm"
+                >
+                    <View className="mr-2 items-end">
+                        <Text className="text-xs text-slate-400 dark:text-slate-500">下一篇</Text>
+                        <Text className="text-slate-700 dark:text-slate-300 font-medium" numberOfLines={1}>较旧的文章</Text>
+                    </View>
+                    <IconSymbol name="chevron.right" size={16} color={isDark ? '#9ca3af' : '#6b7280'} />
+                </TouchableOpacity>
+                ) : <View className="flex-1 ml-2" />}
             </View>
         </ScrollView>
 
@@ -828,7 +1027,7 @@ export default function PostDetailScreen() {
                     
                     <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
                         <Pressable 
-                            onPress={() => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10))}
+                            onPress={() => changeFontSize(-0.1)}
                             className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                         >
                             <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
@@ -838,12 +1037,40 @@ export default function PostDetailScreen() {
                              <Text className="text-slate-900 dark:text-white font-serif" style={{ fontSize: 18 * fontSizeScale }}>预览 Text</Text>
                         </View>
                         <Pressable 
-                            onPress={() => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10))}
+                            onPress={() => changeFontSize(0.1)}
                             className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
                         >
                             <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
                         </Pressable>
                     </View>
+                    
+                    {/* 高亮管理 */}
+                    {highlights.length > 0 && (
+                      <View className="mt-6 border-t border-slate-200 dark:border-slate-800 pt-4">
+                        <Text className="text-base text-slate-700 dark:text-slate-300 font-medium mb-3">我的高亮 ({highlights.length})</Text>
+                        {highlights.map((highlight) => (
+                          <View key={highlight.id} className="mb-3 bg-white dark:bg-slate-800 rounded-lg p-3 border border-slate-200 dark:border-slate-700">
+                            <Text className="text-slate-900 dark:text-white mb-2 leading-relaxed" numberOfLines={3}>
+                              {highlight.text}
+                            </Text>
+                            <View className="flex-row gap-2">
+                              <TouchableOpacity
+                                onPress={() => handleCopyHighlight(highlight.text)}
+                                className="flex-1 bg-blue-100 dark:bg-blue-900/30 rounded-lg py-2 items-center"
+                              >
+                                <Text className="text-blue-600 dark:text-blue-400 text-xs font-medium">复制</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleRemoveHighlight(highlight.id)}
+                                className="flex-1 bg-red-100 dark:bg-red-900/30 rounded-lg py-2 items-center"
+                              >
+                                <Text className="text-red-600 dark:text-red-400 text-xs font-medium">删除</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                 </View>
             </View>
         </Modal>

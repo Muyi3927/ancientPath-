@@ -46,6 +46,12 @@ const MAPPING = {
   'rotate.right': 'rotate-right',
   'rotate.left': 'rotate-left',
   'textformat.size': 'format-size',
+  'heart': 'favorite-border',
+  'heart.fill': 'favorite',
+  'arrow.down.circle.fill': 'cloud-download',
+  'medal.fill': 'military-tech',
+  'star.fill': 'star',
+  'crown.fill': 'emoji-events',
 } as IconMapping;
 
 /**

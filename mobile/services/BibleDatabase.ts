@@ -22,7 +22,7 @@ const VERSION_CONFIG = {
     versesQuery:
       'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE VolumeSN = ? AND ChapterSN = ? ORDER BY VerseSN ASC',
     searchQuery:
-      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC LIMIT 100',
+      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC',
     bookParams: () => [],
     verseParams: (bookId, chapter) => [bookId, chapter],
     searchParams: (query) => [`%${query}%`],
@@ -35,7 +35,7 @@ const VERSION_CONFIG = {
     versesQuery:
       'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE book_id = ? AND chapter = ? ORDER BY verse ASC',
     searchQuery:
-      'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE text LIKE ? ORDER BY book_id, chapter, verse ASC LIMIT 100',
+      'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE text LIKE ? ORDER BY book_id, chapter, verse ASC',
     bookParams: () => [],
     verseParams: (bookId, chapter) => [bookId, chapter],
     searchParams: (query) => [`%${query}%`],

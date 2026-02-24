@@ -8,6 +8,40 @@ import { BlogPost, Category } from '../types';
 export const API_BASE_URL = 'https://api.ancientpath.dpdns.org';
 
 /**
+ * 测试 API 连接性
+ */
+export async function testApiConnection(): Promise<{ success: boolean; message: string }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+    
+    const response = await fetch(`${API_BASE_URL}/api/categories`, {
+      method: 'HEAD',
+      signal: controller.signal,
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (response.ok) {
+      return { success: true, message: `API 连接正常 (${response.status})` };
+    } else {
+      return { 
+        success: false, 
+        message: `API 返回错误状态: ${response.status} ${response.statusText}` 
+      };
+    }
+  } catch (error: any) {
+    if (error.name === 'AbortError') {
+      return { success: false, message: '连接超时，请检查网络' };
+    }
+    return { 
+      success: false, 
+      message: `网络错误: ${error.message}` 
+    };
+  }
+}
+
+/**
  * 统一处理 API 请求的函数
  * @param endpoint API 的路径 (例如 /api/posts)
  * @param options fetch 函数的配置选项
@@ -28,6 +62,8 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
       headers['Authorization'] = `Bearer ${token}`;
   }
 
+  console.log(`🌐 API Request: ${options.method || 'GET'} ${url}`);
+
   // 设置 60 秒超时，以应对冷启动
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 60000);
@@ -37,8 +73,46 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
     clearTimeout(timeoutId);
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: '无法解析错误信息' }));
-      console.log(`API Error: ${response.status} ${response.statusText}`, errorData);
+      // 尝试获取响应的文本内容以便调试
+      let errorText = '';
+      let errorData: any = {};
+      
+      try {
+        errorText = await response.text();
+        // 尝试解析为 JSON
+        if (errorText) {
+          errorData = JSON.parse(errorText);
+        }
+      } catch (parseError) {
+        // 如果无法解析为 JSON，使用文本作为消息
+        errorData = { message: errorText || '无法解析错误信息' };
+      }
+      
+      console.log(`API Error [${response.status}] ${url}:`, {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        body: errorData
+      });
+      
+      // 对特定错误码提供更有帮助的信息
+      if (response.status === 403) {
+        // 403 可能是 token 过期，清除它
+        if (token) {
+          console.log('⚠️ 收到 403 错误，清除可能过期的 token');
+          await AsyncStorage.removeItem('authToken');
+        }
+        throw new Error('访问被拒绝 (403)。如果问题持续，请尝试重新启动应用。');
+      }
+      if (response.status === 401) {
+        // 401 明确是认证问题，清除 token
+        await AsyncStorage.removeItem('authToken');
+        throw new Error('未授权访问 (401)，请重新登录');
+      }
+      if (response.status === 404) {
+        throw new Error(`资源不存在 (404): ${endpoint}`);
+      }
+      
       throw new Error(errorData.message || `请求失败，状态码: ${response.status}`);
     }
     
@@ -72,10 +146,17 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
   } catch (error: any) {
     // 忽略 AbortError (超时)，让上层函数去处理缓存回退
     if (error.name === 'AbortError' || error.message === 'Aborted') {
-        console.log(`Request timed out: ${url}`);
-        throw error;
+        console.log(`⏱️ 请求超时: ${url}`);
+        throw new Error('请求超时，请检查网络连接');
     }
-    console.error('Fetch API 出现严重错误:', error);
+    
+    // 网络错误通常意味着无法连接到服务器
+    if (error.message.includes('Network request failed') || error.message.includes('Failed to fetch')) {
+        console.log(`🔌 网络连接失败: ${url}`);
+        throw new Error('无法连接到服务器，请检查网络连接');
+    }
+    
+    console.error('❌ API 请求失败:', error);
     throw error;
   }
 }
@@ -100,21 +181,39 @@ const transformCategory = (cat: any): Category => ({
 // ==================== 缓存辅助函数 ====================
 
 const CACHE_PREFIX = 'blog_cache_';
+const CACHE_EXPIRY = 24 * 60 * 60 * 1000; // 24 hours
 
 const getCacheKey = (key: string) => `${CACHE_PREFIX}${key}`;
 
+interface CacheItem<T> {
+  data: T;
+  timestamp: number;
+}
+
 const saveToCache = async (key: string, data: any) => {
   try {
-    await AsyncStorage.setItem(getCacheKey(key), JSON.stringify(data));
+    const item: CacheItem<any> = {
+      data,
+      timestamp: Date.now()
+    };
+    await AsyncStorage.setItem(getCacheKey(key), JSON.stringify(item));
   } catch (e) {
     console.warn('Failed to save to cache', e);
   }
 };
 
-const getFromCache = async <T>(key: string): Promise<T | null> => {
+const getFromCache = async <T>(key: string): Promise<CacheItem<T> | null> => {
   try {
-    const data = await AsyncStorage.getItem(getCacheKey(key));
-    return data ? JSON.parse(data) : null;
+    const json = await AsyncStorage.getItem(getCacheKey(key));
+    if (!json) return null;
+    
+    const parsed = JSON.parse(json);
+    // 兼容旧格式 (Legacy support): 如果没有 timestamp 字段，视为旧数据
+    if (!parsed.timestamp || parsed.data === undefined) {
+      // 旧数据直接返回作为 data，timestamp 设为 0 (强制过期)
+      return { data: parsed as T, timestamp: 0 };
+    }
+    return parsed as CacheItem<T>;
   } catch (e) {
     console.warn('Failed to read from cache', e);
     return null;
@@ -126,18 +225,20 @@ const getFromCache = async <T>(key: string): Promise<T | null> => {
 // 导出缓存读取函数，以便 UI 可以实现"缓存优先"策略
 export const getCachedPosts = async (categoryId?: number, search?: string): Promise<BlogPost[] | null> => {
     const cacheKey = `posts_${categoryId ?? 'all'}_${search ?? 'none'}`;
-    return getFromCache<BlogPost[]>(cacheKey);
+    const item = await getFromCache<BlogPost[]>(cacheKey);
+    return item ? item.data : null;
 };
 
 export const getCachedCategories = async (): Promise<Category[] | null> => {
-    return getFromCache<Category[]>('categories');
+    const item = await getFromCache<Category[]>('categories');
+    return item ? item.data : null;
 };
 
 // 获取所有文章
-export const getPosts = async (categoryId?: number, search?: string): Promise<BlogPost[]> => {
+// forceRefresh: 强制从网络获取
+export const getPosts = async (categoryId?: number, search?: string, forceRefresh = false): Promise<BlogPost[]> => {
     let url = '/api/posts';
     const params = new URLSearchParams();
-    // Explicitly check for undefined/null to allow categoryId=0 if needed (though IDs usually start at 1)
     if (categoryId !== undefined && categoryId !== null) {
         params.append('categoryId', categoryId.toString());
     }
@@ -150,52 +251,91 @@ export const getPosts = async (categoryId?: number, search?: string): Promise<Bl
     
     const cacheKey = `posts_${categoryId ?? 'all'}_${search ?? 'none'}`;
 
+    // 1. 尝试使用缓存
+    if (!forceRefresh) {
+      const cached = await getFromCache<BlogPost[]>(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY)) {
+          console.log(`✅ 使用缓存 (未过期): ${cacheKey}`);
+          return cached.data;
+      }
+    }
+
     try {
-        console.log(`Fetching posts from: ${url}`); // Debug log
         const data = await fetchApi<any[]>(url);
         const posts = data.map(transformPost);
         // 成功获取后更新缓存
         saveToCache(cacheKey, posts);
+        console.log(`✅ 成功获取 ${posts.length} 篇讲道`);
         return posts;
-    } catch (error) {
-        console.log('Network request failed, trying cache for posts...');
-        // 网络请求失败，尝试读取缓存
+    } catch (error: any) {
+        console.log(`⚠️ 讲道请求失败: ${error.message}，尝试使用缓存...`);
+        // 网络请求失败，不管是否过期都尝试读取缓存
         const cached = await getFromCache<BlogPost[]>(cacheKey);
         if (cached) {
-            return cached;
+            console.log(`✅ 使用缓存 (虽可能过期/强制刷新失败): ${cached.data.length} 篇讲道`);
+            return cached.data;
         }
+        console.error('❌ 无法获取讲道，且无可用缓存');
         throw error;
     }
 };
 
-// 根据 ID 获取单篇文章
-export const getPostById = async (id: number): Promise<BlogPost> => {
+// 根据 ID 获取单篇讲道
+export const getPostById = async (id: number, forceRefresh = false): Promise<BlogPost> => {
     const cacheKey = `post_${id}`;
+    
+    if (!forceRefresh) {
+      const cached = await getFromCache<BlogPost>(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY)) {
+          console.log(`✅ 使用缓存讲道 (未过期): ${id}`);
+          return cached.data;
+      }
+    }
+
     try {
         const post = await fetchApi<any>(`/api/posts/${id}`);
         const transformed = transformPost(post);
         saveToCache(cacheKey, transformed);
+        console.log(`✅ 成功获取讲道: ${transformed.title}`);
         return transformed;
-    } catch (error) {
-        console.log(`Network request failed for post ${id}, trying cache...`);
+    } catch (error: any) {
+        console.log(`⚠️ 讲道 ${id} 请求失败: ${error.message}，尝试使用缓存...`);
         const cached = await getFromCache<BlogPost>(cacheKey);
-        if (cached) return cached;
+        if (cached) {
+            console.log(`✅ 使用缓存的讲道: ${cached.data.title}`);
+            return cached.data;
+        }
+        console.error(`❌ 无法获取讲道 ${id}，且无可用缓存`);
         throw error;
     }
 };
 
 // 获取所有分类
-export const getCategories = async (): Promise<Category[]> => {
+export const getCategories = async (forceRefresh = false): Promise<Category[]> => {
     const cacheKey = 'categories';
+    
+    if (!forceRefresh) {
+      const cached = await getFromCache<Category[]>(cacheKey);
+      if (cached && (Date.now() - cached.timestamp < CACHE_EXPIRY)) {
+          console.log(`✅ 使用缓存分类 (未过期)`);
+          return cached.data;
+      }
+    }
+
     try {
         const cats = await fetchApi<any[]>('/api/categories');
         const transformed = cats.map(transformCategory);
         saveToCache(cacheKey, transformed);
+        console.log(`✅ 成功获取 ${transformed.length} 个分类`);
         return transformed;
-    } catch (error) {
-        console.log('Network request failed for categories, trying cache...');
+    } catch (error: any) {
+        console.log(`⚠️ 分类请求失败: ${error.message}，尝试使用缓存...`);
         const cached = await getFromCache<Category[]>(cacheKey);
-        if (cached) return cached;
+        if (cached) {
+            console.log(`✅ 使用缓存的 ${cached.data.length} 个分类`);
+            return cached.data;
+        }
+        console.error('❌ 无法获取分类，且无可用缓存');
         throw error;
     }
 };
