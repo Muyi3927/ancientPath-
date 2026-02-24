@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useSearchParams, Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { BlogPost, Category } from '../types';
 import { Clock, Tag, ChevronRight, Filter, X, ChevronLeft, ChevronDown, Folder, FolderOpen, ChevronUp } from 'lucide-react';
+import { ContentLink } from '../components/SmartLink';
 
 interface HomeProps {
   posts: BlogPost[];
@@ -236,10 +237,10 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
       {/* Mobile Title */}
       <div className="md:hidden pt-2 text-center">
           <h1 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">访问古道</h1>
-          <Link to="/about" className="inline-flex items-center gap-1 mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors text-xs font-medium">
+          <ContentLink to="/about" className="inline-flex items-center gap-1 mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors text-xs font-medium">
              <span>关于我们</span>
              <ChevronRight className="w-3 h-3" />
-          </Link>
+          </ContentLink>
       </div>
 
       {/* Featured Carousel Section */}
@@ -251,7 +252,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                 key={post.id}
                 className={`absolute inset-0 w-full h-full transition-opacity duration-700 ease-in-out ${index === currentSlide ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                >
-                    <Link to={`/post/${post.id}`} className="block w-full h-full relative">
+                    <ContentLink to={`/post/${post.id}`} className="block w-full h-full relative">
                         <img 
                         src={post.coverImage} 
                         alt={post.title} 
@@ -270,7 +271,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                                 </p>
                             </div>
                         </div>
-                    </Link>
+                    </ContentLink>
                </div>
            ))}
 
@@ -318,9 +319,9 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                   <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed line-clamp-3">
                       我们秉承欧陆改革宗体系，持守加尔文神学，相信三大普世信经和三项联合信条，坚守教会的三种职分（包括牧师、长老和执事），施行两项圣礼（即洗礼和圣餐）， 遵循基于多特法规改编的教会规章，在教导和管理上与欧陆改革宗教会一致。
                   </p>
-                  <Link to="/about" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-bold transition-colors">
+                  <ContentLink to="/about" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-bold transition-colors">
                       了解更多 <ChevronRight className="w-4 h-4 ml-0.5" />
-                  </Link>
+                  </ContentLink>
               </div>
 
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sticky top-24">
@@ -400,23 +401,23 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                 <div className="space-y-4 md:space-y-6">
                   {paginatedPosts.map((post) => (
                     <article key={post.id} className="group bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col md:flex-row">
-                      <Link to={`/post/${post.id}`} className="block relative overflow-hidden w-full md:w-1/3 h-40 md:min-h-full flex-shrink-0">
+                      <ContentLink to={`/post/${post.id}`} className="block relative overflow-hidden w-full md:w-1/3 h-40 md:min-h-full flex-shrink-0">
                         <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
                         <div className="absolute top-3 left-3 bg-black/50 backdrop-blur text-[10px] md:text-xs font-bold px-2 py-1 rounded text-white">
                           {getCategoryName(post.categoryId)}
                         </div>
-                      </Link>
+                      </ContentLink>
                       <div className="p-4 md:p-6 flex flex-col flex-grow justify-between">
                          <div>
                              <div className="flex items-center gap-2 mb-2 text-[10px] md:text-xs text-slate-500 dark:text-slate-400">
                                 <Clock className="w-3 h-3" />
                                 {format(post.createdAt, 'yyyy年M月d日')}
                              </div>
-                             <Link to={`/post/${post.id}`} className="block">
+                             <ContentLink to={`/post/${post.id}`} className="block">
                                <h2 className="text-lg md:text-xl font-serif font-bold mb-2 text-slate-900 dark:text-slate-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-1">
                                  {post.title}
                                </h2>
-                             </Link>
+                              </ContentLink>
                              <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm leading-relaxed mb-3 md:mb-4">
                                {post.excerpt}
                              </p>
@@ -433,9 +434,9 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                                 </Link>
                               ))}
                             </div>
-                            <Link to={`/post/${post.id}`} className="text-primary-600 text-xs md:text-sm font-medium hover:text-primary-700 flex items-center whitespace-nowrap ml-2">
+                            <ContentLink to={`/post/${post.id}`} className="text-primary-600 text-xs md:text-sm font-medium hover:text-primary-700 flex items-center whitespace-nowrap ml-2">
                               阅读 <ChevronRight className="w-3 h-3 md:w-4 md:h-4 ml-1" />
-                            </Link>
+                              </ContentLink>
                          </div>
                       </div>
                     </article>

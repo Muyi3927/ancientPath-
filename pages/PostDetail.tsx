@@ -164,9 +164,24 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             <button 
                 onClick={() => {
                     const originalTitle = document.title;
+                    const originalBody = document.body.className;
+                    
+                    // 设置文档标题
                     document.title = `访问古道_${post.title}`;
-                    window.print();
-                    document.title = originalTitle;
+                    
+                    // 确保打印样式正确应用
+                    document.body.className = originalBody + ' print-mode';
+                    
+                    // 延迟执行打印以确保样式生效
+                    setTimeout(() => {
+                        window.print();
+                        
+                        // 恢复原始状态
+                        setTimeout(() => {
+                            document.title = originalTitle;
+                            document.body.className = originalBody;
+                        }, 100);
+                    }, 100);
                 }}
                 className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm font-medium shadow-sm"
                 title="导出为 PDF"
@@ -200,7 +215,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
 
       <article className="bg-white dark:bg-slate-900 md:rounded-3xl overflow-hidden shadow-none md:shadow-xl border-y md:border border-slate-100 dark:border-slate-800 -mx-4 md:mx-0">
         {/* Cover Image */}
-        <div className="h-64 md:h-96 w-full relative">
+        <div className="h-64 md:h-96 w-full relative print:hidden">
            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent"></div>
            <div className="absolute bottom-0 left-0 p-6 md:p-12 text-white w-full">
@@ -215,7 +230,25 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
         </div>
 
         <div className="p-6 md:p-12">
-          <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800">
+          {/* 打印时显示的标题和信息 */}
+          <div className="hidden print:block mb-8">
+            <h1 className="text-2xl font-serif font-bold text-black mb-2">{post.title}</h1>
+            <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+              <span>分类：{categoryName}</span>
+              <span>发布时间：{format(post.createdAt, 'yyyy年M月d日')}</span>
+            </div>
+            <div className="border-b border-gray-300 pb-4 mb-6">
+              <div className="flex gap-2 flex-wrap">
+                {post.tags.map(tag => (
+                  <span key={tag} className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800 print:hidden">
              <div className="flex gap-2 flex-wrap">
                 {post.tags.map(tag => (
                    <Link 

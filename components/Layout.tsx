@@ -1,7 +1,9 @@
 import React, { useContext, useState, useRef } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { Sun, Moon, PenTool, LogOut, Search, Menu, X, BookOpen, Home, LayoutGrid, User, Download, Music } from 'lucide-react';
 import { ThemeContext, AuthContext, LayoutContext } from '../App';
+import { CacheIndicator } from './CacheManager';
+import { NavLink } from './SmartLink';
 
 export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isDark, toggleTheme } = useContext(ThemeContext);
@@ -56,13 +58,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
             
             {/* Logo - Hidden on Mobile */}
             <div className="flex-shrink-0 hidden md:block">
-              <Link to="/" className="flex items-center gap-3">
+              <NavLink to="/" className="flex items-center gap-3">
                 <img src="/logo.svg" alt="Logo" className="w-9 h-9 rounded-lg shadow-lg" />
                 <div className="flex flex-col -space-y-1">
                    <span className="font-serif font-bold text-lg tracking-tight text-slate-900 dark:text-slate-100">访问古道</span>
                    <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest">Ask for the Ancient Paths</span>
                 </div>
-              </Link>
+              </NavLink>
             </div>
 
             {/* Logo placeholder for Mobile - Show only Search or nothing to keep it clean */}
@@ -72,21 +74,21 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
             {/* Desktop Nav */}
             <div className="hidden md:flex items-center space-x-8">
-              <Link to="/" className={`${isActive('/') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+              <NavLink to="/" className={`${isActive('/') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 首页
-              </Link>
-              <Link to="/bible" className={`${isActive('/bible') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+              </NavLink>
+              <NavLink to="/bible" className={`${isActive('/bible') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 圣经
-              </Link>
-              <Link to="/categories" className={`${isActive('/categories') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+              </NavLink>
+              <NavLink to="/categories" className={`${isActive('/categories') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 分类
-              </Link>
-              <Link to="/hymns" className={`${isActive('/hymns') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+              </NavLink>
+              <NavLink to="/hymns" className={`${isActive('/hymns') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 诗歌
-              </Link>
-              <Link to="/app" className={`${isActive('/app') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
+              </NavLink>
+              <NavLink to="/app" className={`${isActive('/app') ? 'text-primary-600 font-bold' : 'hover:text-primary-500 font-medium'} transition-colors`}>
                 下载App
-              </Link>
+              </NavLink>
               
               {/* Search Bar */}
               <form onSubmit={handleSearch} className="relative">
@@ -103,6 +105,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
             {/* Right Actions */}
             <div className="flex items-center gap-4">
+              {/* Cache Indicator */}
+              <CacheIndicator className="hidden lg:flex" />
+              
               <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors hidden md:block">
                 {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
               </button>
@@ -111,14 +116,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
                 <div className="flex items-center gap-4">
                   {isAdmin && (
                     <div className="flex items-center gap-2">
-                        <Link to="/editor" className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-lg">
+                        <NavLink to="/editor" className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-lg">
                         <PenTool className="w-4 h-4" />
                         <span className="hidden sm:inline">撰写</span>
-                        </Link>
-                        <Link to="/drafts" className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-2 rounded-full text-sm font-medium transition-colors">
+                        </NavLink>
+                        <NavLink to="/drafts" className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-2 rounded-full text-sm font-medium transition-colors">
                         <span className="hidden sm:inline">草稿箱</span>
                         <span className="sm:hidden">草稿</span>
-                        </Link>
+                        </NavLink>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
@@ -158,7 +163,7 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
 
       {/* Bottom Nav for Mobile */}
-      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 flex justify-around items-center h-16 z-50 pb-safe transition-transform duration-500 ease-in-out ${isMenuVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 flex justify-around items-center h-16 z-50 pb-safe transition-transform duration-500 ease-in-out print:hidden ${isMenuVisible ? 'translate-y-0' : 'translate-y-full'}`}>
         <Link to="/" className={`flex flex-col items-center p-2 ${isActive('/') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
           <Home className="w-6 h-6" />
           <span className="text-[10px] mt-1">首页</span>

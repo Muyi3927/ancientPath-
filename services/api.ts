@@ -1,5 +1,6 @@
 // services/api.ts
 import { BlogPost, Category } from '../types';
+import { webCache, CacheConfigs } from './cache';
 
 // Automatically switch to local backend in development
 const API_BASE_URL = import.meta.env.DEV 
@@ -108,22 +109,65 @@ const transformCategory = (cat: any): Category => ({
 
 // ==================== API 函数 ====================
 
-// 获取所有文章
-export const getPosts = async (): Promise<BlogPost[]> => {
-    const posts = await fetchApi<any[]>('/api/posts');
-    return posts.map(transformPost);
+// 获取所有文章 (带缓存)
+export const getPosts = async (useCache: boolean = true): Promise<BlogPost[]> => {
+    if (!useCache) {
+        // 强制从服务器获取最新数据
+        const posts = await fetchApi<any[]>('/api/posts');
+        const transformedPosts = posts.map(transformPost);
+        // 更新缓存
+        webCache.set('posts', transformedPosts, CacheConfigs.posts);
+        return transformedPosts;
+    }
+
+    return webCache.get(
+        'posts',
+        async () => {
+            const posts = await fetchApi<any[]>('/api/posts');
+            return posts.map(transformPost);
+        },
+        CacheConfigs.posts
+    );
 };
 
-// 根据 ID 获取单篇文章
-export const getPostById = async (id: number): Promise<BlogPost> => {
-    const post = await fetchApi<any>(`/api/posts/${id}`);
-    return transformPost(post);
+// 根据 ID 获取单篇文章 (带缓存)
+export const getPostById = async (id: number, useCache: boolean = true): Promise<BlogPost> => {
+    const cacheKey = `post_${id}`;
+    
+    if (!useCache) {
+        const post = await fetchApi<any>(`/api/posts/${id}`);
+        const transformedPost = transformPost(post);
+        webCache.set(cacheKey, transformedPost, CacheConfigs.post);
+        return transformedPost;
+    }
+
+    return webCache.get(
+        cacheKey,
+        async () => {
+            const post = await fetchApi<any>(`/api/posts/${id}`);
+            return transformPost(post);
+        },
+        CacheConfigs.post
+    );
 };
 
-// 获取所有分类
-export const getCategories = async (): Promise<Category[]> => {
-    const cats = await fetchApi<any[]>('/api/categories');
-    return cats.map(transformCategory);
+// 获取所有分类 (带缓存)
+export const getCategories = async (useCache: boolean = true): Promise<Category[]> => {
+    if (!useCache) {
+        const cats = await fetchApi<any[]>('/api/categories');
+        const transformedCategories = cats.map(transformCategory);
+        webCache.set('categories', transformedCategories, CacheConfigs.categories);
+        return transformedCategories;
+    }
+
+    return webCache.get(
+        'categories',
+        async () => {
+            const cats = await fetchApi<any[]>('/api/categories');
+            return cats.map(transformCategory);
+        },
+        CacheConfigs.categories
+    );
 };
 
 // 创建新文章
@@ -132,6 +176,10 @@ export const createPost = async (postData: Omit<BlogPost, 'id' | 'createdAt' | '
     method: 'POST',
     body: JSON.stringify(postData),
   });
+  
+  // 清除文章列表缓存，强制下次获取最新数据
+  webCache.delete('posts');
+  
   // 构造返回对象，因为后端只返回 { success: true, id: ... }
   return {
       ...postData,
@@ -151,11 +199,22 @@ export const updatePost = async (id: number, postData: Partial<BlogPost>): Promi
     method: 'POST',
     body: JSON.stringify({ ...postData, id }),
   });
+  
+  // 清除相关缓存
+  webCache.delete('posts');
+  webCache.delete(`post_${id}`);
+  
   return { id, ...postData } as BlogPost;
 };
 
 // 删除文章
-export const deletePost = (id: number): Promise<void> => fetchApi(`/api/posts/${id}`, { method: 'DELETE' });
+export const deletePost = async (id: number): Promise<void> => {
+  await fetchApi(`/api/posts/${id}`, { method: 'DELETE' });
+  
+  // 清除相关缓存
+  webCache.delete('posts');
+  webCache.delete(`post_${id}`);
+};
 
 // 创建新分类
 export const createCategory = async (categoryData: { name: string; parentId?: number }): Promise<Category> => {
@@ -163,14 +222,21 @@ export const createCategory = async (categoryData: { name: string; parentId?: nu
       method: 'POST',
       body: JSON.stringify(categoryData),
   });
+  
+  // 清除分类缓存
+  webCache.delete('categories');
+  
   return transformCategory(cat);
 };
 
 // 删除分类
-export const deleteCategory = (id: number): Promise<void> => {
-  return fetchApi(`/api/categories/${id}`, {
+export const deleteCategory = async (id: number): Promise<void> => {
+  await fetchApi(`/api/categories/${id}`, {
       method: 'DELETE',
   });
+  
+  // 清除分类缓存
+  webCache.delete('categories');
 };
 
 // 上传文件 (直接上传到后端)
@@ -206,4 +272,50 @@ export const uploadFile = async (file: File): Promise<string> => {
 
   const result = await response.json();
   return result.url;
+};
+
+// ==================== 缓存管理工具 ====================
+
+// 预加载关键数据
+export const preloadData = async (): Promise<void> => {
+  try {
+    // 并行预加载文章和分类
+    await Promise.all([
+      webCache.preload('posts', async () => {
+        const posts = await fetchApi<any[]>('/api/posts');
+        return posts.map(transformPost);
+      }, CacheConfigs.posts),
+      
+      webCache.preload('categories', async () => {
+        const cats = await fetchApi<any[]>('/api/categories');
+        return cats.map(transformCategory);
+      }, CacheConfigs.categories)
+    ]);
+  } catch (error) {
+    console.warn('预加载数据失败:', error);
+  }
+};
+
+// 刷新所有缓存
+export const refreshAllCache = async (): Promise<void> => {
+  webCache.clear();
+  await preloadData();
+};
+
+// 获取缓存状态
+export const getCacheStats = () => webCache.getStats();
+
+// 手动清除特定缓存
+export const clearCache = (type: 'posts' | 'categories' | 'all') => {
+  switch (type) {
+    case 'posts':
+      webCache.delete('posts');
+      break;
+    case 'categories':
+      webCache.delete('categories');
+      break;
+    case 'all':
+      webCache.clear();
+      break;
+  }
 };

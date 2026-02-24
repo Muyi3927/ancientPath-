@@ -11,8 +11,9 @@ import { Categories } from './pages/Categories';
 import { Hymns } from './pages/Hymns';
 import { DownloadApp } from './pages/DownloadApp';
 import { Drafts } from './pages/Drafts';
+import { LoadingIndicator } from './components/LoadingIndicator';
 import { ThemeContextType, AuthContextType, User, UserRole, BlogPost, Category } from './types';
-import { getPosts, getCategories, createCategory, deleteCategory as apiDeleteCategory, deletePost } from './services/api';
+import { getPosts, getCategories, createCategory, deleteCategory as apiDeleteCategory, deletePost, preloadData } from './services/api';
 
 // Contexts
 export const ThemeContext = createContext<ThemeContextType>({
@@ -62,11 +63,15 @@ const App: React.FC = () => {
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [dataLoading, setDataLoading] = useState(false);
 
   // 初始化主题
   useEffect(() => {
     const isSystemDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     setIsDark(isSystemDark);
+    
+    // 应用启动时预加载数据
+    preloadData();
   }, []);
 
   useEffect(() => {
@@ -74,12 +79,14 @@ const App: React.FC = () => {
     else document.documentElement.classList.remove('dark');
   }, [isDark]);
 
-  // 从后端加载数据
-  const refreshPosts = async () => {
+  // 从后端加载数据 (使用缓存)
+  const refreshPosts = async (forceRefresh: boolean = false) => {
+    if (forceRefresh) setDataLoading(true);
+    
     try {
       const [fetchedPosts, fetchedCategories] = await Promise.all([
-        getPosts(),
-        getCategories()
+        getPosts(!forceRefresh), // 使用缓存，除非强制刷新
+        getCategories(!forceRefresh)
       ]);
       
       // 仅当获取到有效数据时更新状态
@@ -93,6 +100,7 @@ const App: React.FC = () => {
       console.error("从 API 加载数据失败", e);
     } finally {
       setLoading(false);
+      setDataLoading(false);
     }
   };
 
@@ -254,6 +262,13 @@ const App: React.FC = () => {
                             <Route path="*" element={<Navigate to="/" />} />
                           </Routes>
                         </Layout>
+                        
+                        {/* 全局加载指示器 */}
+                        <LoadingIndicator 
+                          show={dataLoading} 
+                          message="正在更新数据..." 
+                          delay={300}
+                        />
                         </BrowserRouter>
                       </LayoutContext.Provider>      </AuthContext.Provider>
     </ThemeContext.Provider>
