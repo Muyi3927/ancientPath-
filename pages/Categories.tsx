@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { getCategories, getPosts } from '../services/api';
 import { Category, BlogPost } from '../types';
 import { Calendar, User, Tag, PlayCircle } from 'lucide-react';
@@ -21,6 +21,7 @@ const BIBLE_ORDER = [
 ];
 
 export const Categories: React.FC = () => {
+  const location = useLocation();
   const [categories, setCategories] = useState<Category[]>([]);
   const [allPosts, setAllPosts] = useState<BlogPost[]>([]);
   const [loading, setLoading] = useState(true);
@@ -57,10 +58,35 @@ export const Categories: React.FC = () => {
         setCategories(sortedCats);
         setAllPosts(posts);
 
-        // Select first L1 category by default
-        const firstL1 = sortedCats.find(c => !c.parentId);
-        if (firstL1) {
-            setSelectedL1Id(firstL1.id);
+        // Check for category in URL params
+        const params = new URLSearchParams(window.location.search);
+        const categoryIdParam = params.get('category');
+        let initialSelectionMade = false;
+
+        if (categoryIdParam) {
+            const targetId = parseInt(categoryIdParam);
+            const targetCat = sortedCats.find(c => c.id === targetId);
+            
+            if (targetCat) {
+                if (targetCat.parentId) {
+                    // It's a sub-category
+                    setSelectedL1Id(targetCat.parentId);
+                    setSelectedL2Id(targetCat.id);
+                } else {
+                    // It's a top-level category
+                    setSelectedL1Id(targetCat.id);
+                    setSelectedL2Id(null);
+                }
+                initialSelectionMade = true;
+            }
+        }
+
+        if (!initialSelectionMade) {
+            // Select first L1 category by default
+            const firstL1 = sortedCats.find(c => !c.parentId);
+            if (firstL1) {
+                setSelectedL1Id(firstL1.id);
+            }
         }
       } catch (e) {
         console.error("Failed to load data", e);

@@ -36,6 +36,31 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   const [tocMaxLevel, setTocMaxLevel] = useState(3);
   const [currentHeadingId, setCurrentHeadingId] = useState<string>('');
   const tocContainerRef = useRef<HTMLDivElement>(null);
+  const pendingScrollId = useRef<string | null>(null);
+
+  // 获取实际的滚动容器（Layout中的 overflow-y-auto div）
+  const getScrollContainer = () => {
+    return document.querySelector('.overflow-y-auto') as HTMLElement | null;
+  };
+
+  // 当模态框关闭后，执行滚动
+  useEffect(() => {
+    if (!showTOC && pendingScrollId.current) {
+      const targetId = pendingScrollId.current;
+      pendingScrollId.current = null;
+      // 等待模态框DOM完全移除
+      requestAnimationFrame(() => {
+        const el = document.getElementById(targetId);
+        const container = getScrollContainer();
+        if (el && container) {
+          const containerRect = container.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const scrollTop = container.scrollTop + (elRect.top - containerRect.top) - 20;
+          container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+        }
+      });
+    }
+  }, [showTOC]);
 
   // Image Preview State
   const [previewImage, setPreviewImage] = useState<string | null>(null);
@@ -59,31 +84,38 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
 
   // Track current heading on scroll
   useEffect(() => {
+    const container = getScrollContainer();
+    if (!container) return;
+
     const handleScroll = () => {
       if (headings.length === 0) return;
       
-      const scrollPosition = window.scrollY + 100;
+      const containerRect = container.getBoundingClientRect();
+      const scrollThreshold = containerRect.top + 100;
       
       // Find current heading
       let currentId = '';
       for (let i = headings.length - 1; i >= 0; i--) {
         const element = document.getElementById(headings[i].id);
-        if (element && element.offsetTop <= scrollPosition) {
-          currentId = headings[i].id;
-          break;
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= scrollThreshold) {
+            currentId = headings[i].id;
+            break;
+          }
         }
       }
       
       setCurrentHeadingId(currentId);
     };
 
-    window.addEventListener('scroll', handleScroll);
+    container.addEventListener('scroll', handleScroll);
     handleScroll(); // Initial check
     
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => container.removeEventListener('scroll', handleScroll);
   }, [headings]);
 
-  // Scroll TOC to current heading when level changes
+  // Scroll TOC to current heading when opened
   useEffect(() => {
     if (showTOC && currentHeadingId && tocContainerRef.current) {
       const currentButton = tocContainerRef.current.querySelector(`[data-heading-id="${currentHeadingId}"]`);
@@ -91,7 +123,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
         currentButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
     }
-  }, [showTOC, tocMaxLevel, currentHeadingId]);
+  }, [showTOC, currentHeadingId]);
 
   useEffect(() => {
     // --- 修复: 使用非严格相等 (==) 来比较数字 ID 和 URL 中的字符串 ID ---
@@ -134,6 +166,41 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // 但为了保险起见，或者如果 categories 还没加载完，我们做个防御性检查。
   const categoryName = categories?.find(c => String(c.id) === String(post.categoryId))?.name || '未分类';
   
+  // 获取返回链接和文本
+  const getBackLink = () => {
+    if (!categories || !post) {
+      return { path: '/', text: '返回列表' };
+    }
+    
+    // 查找当前文章的分类
+    let currentCategory = categories.find(c => String(c.id) === String(post.categoryId));
+    
+    if (!currentCategory) {
+      return { path: '/', text: '返回列表' };
+    }
+    
+    // 向上追溯，找到顶级分类
+    let topCategory = currentCategory;
+    while (topCategory.parentId) {
+      const parent = categories.find(c => c.id === topCategory.parentId);
+      if (parent) {
+        topCategory = parent;
+      } else {
+        break;
+      }
+    }
+    
+    // 判断顶级分类是否是诗歌类
+    if (topCategory.name === '韵律诗篇' || topCategory.name === '圣诗') {
+      return { path: '/hymns', text: '返回诗歌' };
+    }
+    
+    // 其他分类返回到分类页面，带上当前分类参数以便正确定位
+    return { path: `/categories?category=${currentCategory.id}`, text: `返回${currentCategory.name}` };
+  };
+  
+  const backLink = getBackLink();
+  
   const handleImageClick = (src: string) => {
     setPreviewImage(src);
     setImageRotation(0);
@@ -144,8 +211,11 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-wrap gap-4 justify-between items-center mb-6 print:hidden">
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center text-slate-500 hover:text-primary-600 transition-colors">
-                <ArrowLeft className="w-4 h-4 mr-2" /> 返回列表
+            <Link 
+              to={backLink.path} 
+              className="flex items-center text-slate-500 hover:text-primary-600 transition-colors"
+            >
+                <ArrowLeft className="w-4 h-4 mr-2" /> {backLink.text}
             </Link>
             {isAdmin && (
                 <div className="flex gap-2">
@@ -421,37 +491,31 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-3">
                 <h3 className="font-serif font-bold text-xl text-slate-900 dark:text-white">目录</h3>
-                <div className="flex items-center bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
-                  <button
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                  <button 
                     onClick={() => setTocMaxLevel(2)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      tocMaxLevel === 2
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 2 
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
-                  >
-                    简
-                  </button>
-                  <button
+                  >简</button>
+                  <button 
                     onClick={() => setTocMaxLevel(3)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      tocMaxLevel === 3
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 3 
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
-                  >
-                    中
-                  </button>
-                  <button
+                  >中</button>
+                  <button 
                     onClick={() => setTocMaxLevel(6)}
-                    className={`px-2 py-1 text-xs rounded transition-colors ${
-                      tocMaxLevel === 6
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white font-bold shadow-sm'
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 6 
+                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
-                  >
-                    详
-                  </button>
+                  >详</button>
                 </div>
               </div>
               <button onClick={() => setShowTOC(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
@@ -460,84 +524,48 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             </div>
 
             {/* TOC Content */}
-            <nav ref={tocContainerRef} className="flex-1 overflow-y-auto px-6 pt-4" style={{ paddingBottom: '4rem' }}>
-              <div className="space-y-1">
-                {headings.filter(h => h.level <= tocMaxLevel).map((h, i) => {
-                  // Simple highlight logic: check if this heading is the current one or contains it
-                  let isHighlighted = false;
-                  
-                  if (currentHeadingId) {
-                    const currentIndex = headings.findIndex(hd => hd.id === currentHeadingId);
-                    const thisIndex = headings.findIndex(hd => hd.id === h.id);
-                    
-                    if (currentIndex >= 0 && thisIndex >= 0 && thisIndex <= currentIndex) {
-                      // This heading is before or at current position
-                      // Check if the next heading of same or higher level is after current position
-                      let nextSameLevelIndex = headings.findIndex((hd, idx) => 
-                        idx > thisIndex && hd.level <= h.level
-                      );
-                      
-                      // This heading contains current position
-                      const containsCurrent = (nextSameLevelIndex === -1 || nextSameLevelIndex > currentIndex);
-                      
-                      if (containsCurrent) {
-                        // Check if there's a higher-level (lower number) heading in filtered list that also contains current
-                        const filteredHeadings = headings.filter(hd => hd.level <= tocMaxLevel);
-                        const hasHigherLevelInFiltered = filteredHeadings.some((other) => {
-                          if (other.level >= h.level) return false;
-                          
-                          const otherIndex = headings.findIndex(hd => hd.id === other.id);
-                          if (otherIndex > currentIndex || otherIndex > thisIndex) return false;
-                          
-                          // Check if other heading contains current position
-                          let nextOtherSameLevelIndex = headings.findIndex((hd, idx) => 
-                            idx > otherIndex && hd.level <= other.level
-                          );
-                          
-                          return (nextOtherSameLevelIndex === -1 || nextOtherSameLevelIndex > currentIndex);
-                        });
-                        
-                        isHighlighted = !hasHigherLevelInFiltered;
-                      }
-                    }
+            <div ref={tocContainerRef} className="flex-1 overflow-y-auto px-4 py-4">
+              <ul className="space-y-1 list-none m-0 p-0">
+                {headings.filter(h => {
+                  if (tocMaxLevel >= 6) return true;
+                  if (tocMaxLevel === 2) {
+                    // "简"模式：显示h1、h2，如果没有h1和h2则显示h3
+                    const hasH1orH2 = headings.some(hh => hh.level <= 2);
+                    return hasH1orH2 ? h.level <= 2 : h.level <= 3;
                   }
+                  return h.level <= tocMaxLevel;
+                }).map((h, i) => {
+                  const isActive = h.id === currentHeadingId;
 
-                  let indentClass = '';
-                  if (h.level === 1) indentClass = 'pl-0';
-                  else if (h.level === 2) indentClass = 'pl-4';
-                  else if (h.level === 3) indentClass = 'pl-8';
-                  else if (h.level === 4) indentClass = 'pl-12';
-                  else if (h.level >= 5) indentClass = 'pl-16';
+                  let paddingLeft = 0;
+                  if (h.level === 2) paddingLeft = 16;
+                  else if (h.level === 3) paddingLeft = 32;
+                  else if (h.level === 4) paddingLeft = 48;
+                  else if (h.level >= 5) paddingLeft = 64;
 
                   return (
-                    <button 
+                    <li
                       key={i}
-                      data-heading-id={h.id}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
-                        const element = document.getElementById(h.id);
-                        if (element) {
-                          setShowTOC(false);
-                          setTimeout(() => {
-                            element.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                          }, 50);
-                        } else {
-                          console.log('Element not found:', h.id);
-                        }
+                        if (!h.id) return;
+                        pendingScrollId.current = h.id;
+                        setShowTOC(false);
                       }}
-                      className={`block w-full text-left py-2.5 px-3 rounded-lg text-sm transition-all ${
-                        indentClass
-                      } ${
-                        isHighlighted
-                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-bold border-l-4 border-blue-600 dark:border-blue-400'
-                          : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 border-l-4 border-transparent'
+                      style={{ paddingLeft: `${paddingLeft}px` }}
+                      className={`py-2 px-3 rounded-lg text-sm transition-all cursor-pointer select-none ${
+                        isActive
+                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold border-l-2 border-blue-500'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-l-2 border-transparent'
                       }`}
                     >
                       {h.text}
-                    </button>
+                    </li>
                   );
                 })}
-              </div>
-            </nav>
+              </ul>
+            </div>
           </div>
         </div>
       )}

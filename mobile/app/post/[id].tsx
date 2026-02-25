@@ -69,6 +69,7 @@ export default function PostDetailScreen() {
   const scrollViewRef = useRef<ScrollView>(null);
   const headerPositionsRef = useRef<{[index: number]: number}>({});
   const htmlContainerYRef = useRef(0);
+  const tocRef = useRef<{text: string, level: number, key: string}[]>([]);
   const [initialScrollY, setInitialScrollY] = useState(0);
   const currentScrollY = useRef(0);
   
@@ -159,7 +160,7 @@ export default function PostDetailScreen() {
                 viewRef.current.measureLayout(
                     scrollViewRef.current as any,
                     (x, y, width, height) => {
-                        const index = toc.findIndex(t => t.key === id);
+                        const index = tocRef.current.findIndex(t => t.key === id);
                         if (index !== -1) {
                             headerPositionsRef.current[index] = y;
                         }
@@ -167,7 +168,7 @@ export default function PostDetailScreen() {
                     () => {
                         // Fallback to simple layout if measureLayout fails
                         const y = e.nativeEvent.layout.y;
-                        const index = toc.findIndex(t => t.key === id);
+                        const index = tocRef.current.findIndex(t => t.key === id);
                         if (index !== -1) {
                             headerPositionsRef.current[index] = y + htmlContainerYRef.current;
                         }
@@ -241,7 +242,7 @@ export default function PostDetailScreen() {
         h6: HeadingRenderer,
         img: ImageRenderer
     };
-  }, [toc, isDark, originalImageUrls, showImageGuide]);
+  }, [isDark, originalImageUrls, showImageGuide]);
 
   // Define Stack.Screen here to ensure title is set even during loading
   const stackScreen = useMemo(() => (
@@ -351,7 +352,7 @@ export default function PostDetailScreen() {
                };
             });
           setToc(headings);
-          setToc(headings);
+          tocRef.current = headings;
         })
         .catch(console.error)
         .finally(() => setLoading(false));
@@ -485,11 +486,21 @@ export default function PostDetailScreen() {
   const [tocMaxLevel, setTocMaxLevel] = useState(3);
   const tocFlatListRef = useRef<FlatList>(null);
 
+  // 过滤目录：简模式下如果没有h1/h2，则显示h3
+  const filterToc = useCallback((items: typeof toc) => {
+    if (tocMaxLevel >= 6) return items;
+    if (tocMaxLevel === 2) {
+      const hasH1orH2 = items.some(h => h.level <= 2);
+      return items.filter(h => h.level <= (hasH1orH2 ? 2 : 3));
+    }
+    return items.filter(h => h.level <= tocMaxLevel);
+  }, [tocMaxLevel]);
+
   // Helper function to scroll TOC to current reading position
   const scrollTocToCurrentPosition = useCallback(() => {
     if (!tocFlatListRef.current || toc.length === 0) return;
     
-    const filteredToc = toc.filter(h => h.level <= tocMaxLevel);
+    const filteredToc = filterToc(toc);
     
     // If filtered list is empty, don't try to scroll
     if (filteredToc.length === 0) return;
@@ -506,16 +517,18 @@ export default function PostDetailScreen() {
       }
     }
     
-    // Use setTimeout to ensure FlatList is ready
+    // Use setTimeout to ensure FlatList is ready, then scroll by estimated offset
     setTimeout(() => {
       if (filteredToc.length > 0) {
-        tocFlatListRef.current?.scrollToIndex({
-          index: Math.max(0, Math.min(currentIndex, filteredToc.length - 1)),
-          animated: true,
-          viewPosition: 0.5, // Center the item
+        const targetIndex = Math.max(0, Math.min(currentIndex, filteredToc.length - 1));
+        // 估算每项高度约49, 居中显示 (viewPosition 0.5 效果)
+        const estimatedOffset = Math.max(0, targetIndex * 49 - 150);
+        tocFlatListRef.current?.scrollToOffset({
+          offset: estimatedOffset,
+          animated: false,
         });
       }
-    }, 100);
+    }, 50);
   }, [toc, tocMaxLevel]);
 
   // Scroll TOC when level changes
@@ -821,6 +834,7 @@ export default function PostDetailScreen() {
         {toc.length > 0 && (
             <Pressable 
                 className="absolute bottom-8 right-6 bg-blue-600 p-4 rounded-full shadow-lg"
+                style={{ zIndex: 999, elevation: 10 }}
                 onPress={() => setTocVisible(true)}
             >
                 <IconSymbol name="list.bullet" size={24} color="white" />
@@ -885,29 +899,8 @@ export default function PostDetailScreen() {
                     </View>
                     <FlatList
                         ref={tocFlatListRef}
-                        data={toc.filter(h => h.level <= tocMaxLevel)}
+                        data={filterToc(toc)}
                         keyExtractor={item => item.key}
-                        initialScrollIndex={(() => {
-                            // Find the current heading based on scroll position
-                            const filteredToc = toc.filter(h => h.level <= tocMaxLevel);
-                            let currentIndex = 0;
-                            for (let i = 0; i < toc.length; i++) {
-                                const headingY = headerPositionsRef.current[i];
-                                if (headingY !== undefined && headingY <= currentScrollY.current + 100) {
-                                    // Check if this heading is in the filtered list
-                                    const filteredIndex = filteredToc.findIndex(t => t.key === toc[i].key);
-                                    if (filteredIndex !== -1) {
-                                        currentIndex = filteredIndex;
-                                    }
-                                }
-                            }
-                            return Math.max(0, currentIndex);
-                        })()}
-                        getItemLayout={(data, index) => ({
-                            length: 49, // 估计的每项高度 (paddingVertical: 12 * 2 + borderBottom: 1 + text height)
-                            offset: 49 * index,
-                            index,
-                        })}
                         onScrollToIndexFailed={(info) => {
                             // Fallback if scrollToIndex fails
                             setTimeout(() => {
