@@ -39,6 +39,56 @@ const READING_HISTORY_KEY = 'bible_reading_history';
 const SEARCH_HISTORY_KEY = 'bible_search_history';
 const MAX_SEARCH_HISTORY = 10;
 
+// 圣经书卷简写映射表
+const BOOK_SHORT_NAME_MAP: Record<string, string> = {
+  // 中文书卷名 - 旧约
+  '创世记': '创', '出埃及记': '出', '利未记': '利', '民数记': '民', '申命记': '申',
+  '约书亚记': '书', '士师记': '士', '路得记': '得', '撒母耳记上': '撒上', '撒母耳记下': '撒下',
+  '列王纪上': '王上', '列王纪下': '王下', '历代志上': '代上', '历代志下': '代下',
+  '以斯拉记': '拉', '尼希米记': '尼', '以斯帖记': '斯',
+  '约伯记': '伯', '诗篇': '诗', '箴言': '箴', '传道书': '传', '雅歌': '歌',
+  '以赛亚书': '赛', '耶利米书': '耶', '耶利米哀歌': '哀', '以西结书': '结', '但以理书': '但',
+  '何西阿书': '何', '约珥书': '珥', '阿摩司书': '摩', '俄巴底亚书': '俄', '约拿书': '拿',
+  '弥迦书': '弥', '那鸿书': '鸿', '哈巴谷书': '哈', '西番雅书': '番', '哈该书': '该',
+  '撒迦利亚书': '亚', '玛拉基书': '玛',
+  // 中文书卷名 - 新约
+  '马太福音': '太', '马可福音': '可', '路加福音': '路', '约翰福音': '约',
+  '使徒行传': '徒', '罗马书': '罗',
+  '哥林多前书': '林前', '哥林多后书': '林后', '加拉太书': '加', '以弗所书': '弗',
+  '腓立比书': '腓', '歌罗西书': '西',
+  '帖撒罗尼迦前书': '帖前', '帖撒罗尼迦后书': '帖后',
+  '提摩太前书': '提前', '提摩太后书': '提后', '提多书': '多', '腓利门书': '门',
+  '希伯来书': '来', '雅各书': '雅', '彼得前书': '彼前', '彼得后书': '彼后',
+  '约翰壹书': '约一', '约翰贰书': '约二', '约翰叁书': '约三', '犹大书': '犹',
+  '启示录': '启',
+  
+  // 英文书卷名 (ASV) - 旧约
+  'Genesis': '创', 'Exodus': '出', 'Leviticus': '利', 'Numbers': '民', 'Deuteronomy': '申',
+  'Joshua': '书', 'Judges': '士', 'Ruth': '得', 'I Samuel': '撒上', 'II Samuel': '撒下',
+  'I Kings': '王上', 'II Kings': '王下', 'I Chronicles': '代上', 'II Chronicles': '代下',
+  'Ezra': '拉', 'Nehemiah': '尼', 'Esther': '斯',
+  'Job': '伯', 'Psalms': '诗', 'Proverbs': '箴', 'Ecclesiastes': '传', 'Song of Solomon': '歌',
+  'Isaiah': '赛', 'Jeremiah': '耶', 'Lamentations': '哀', 'Ezekiel': '结', 'Daniel': '但',
+  'Hosea': '何', 'Joel': '珥', 'Amos': '摩', 'Obadiah': '俄', 'Jonah': '拿',
+  'Micah': '弥', 'Nahum': '鸿', 'Habakkuk': '哈', 'Zephaniah': '番', 'Haggai': '该',
+  'Zechariah': '亚', 'Malachi': '玛',
+  // 英文书卷名 (ASV) - 新约
+  'Matthew': '太', 'Mark': '可', 'Luke': '路', 'John': '约',
+  'Acts': '徒', 'Romans': '罗',
+  'I Corinthians': '林前', 'II Corinthians': '林后', 'Galatians': '加', 'Ephesians': '弗',
+  'Philippians': '腓', 'Colossians': '西',
+  'I Thessalonians': '帖前', 'II Thessalonians': '帖后',
+  'I Timothy': '提前', 'II Timothy': '提后', 'Titus': '多', 'Philemon': '门',
+  'Hebrews': '来', 'James': '雅', 'I Peter': '彼前', 'II Peter': '彼后',
+  'I John': '约一', 'II John': '约二', 'III John': '约三', 'Jude': '犹',
+  'Revelation of John': '启',
+};
+
+// 获取书卷简写
+const getBookShortName = (fullName: string): string => {
+  return BOOK_SHORT_NAME_MAP[fullName] || fullName.charAt(0);
+};
+
 export default function BibleScreen() {
   const insets = useSafeAreaInsets();
   const [safeTop, setSafeTop] = useState(0);
@@ -851,7 +901,7 @@ export default function BibleScreen() {
                 onPress={() => setShowBookModal(true)}
               >
                 <Text className="text-base font-bold text-blue-700 dark:text-blue-200 mr-1">
-                  {currentBook?.FullName || '加载中...'}
+                  {currentBook ? getBookShortName(currentBook.FullName) : '加载中...'}
                 </Text>
                 <IconSymbol name="chevron.down" size={12} color={isDark ? '#93c5fd' : '#1d4ed8'} />
               </TouchableOpacity>
@@ -861,23 +911,24 @@ export default function BibleScreen() {
                 onPress={() => setShowChapterModal(true)}
               >
                 <Text className="text-base font-bold text-emerald-700 dark:text-emerald-200 mr-1">
-                  第 {currentChapter} 章
+                  {currentChapter} 章
                 </Text>
                 <IconSymbol name="chevron.down" size={12} color={isDark ? '#a7f3d0' : '#047857'} />
               </TouchableOpacity>
-            </View>
 
-            <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <TouchableOpacity
                 className={`flex-row items-center px-3 py-2 rounded-full border ${verses.length === 0 ? 'bg-gray-100 border-gray-200 dark:bg-gray-800 dark:border-gray-700' : 'bg-purple-100 border-purple-200 dark:bg-purple-900/40 dark:border-purple-700'}`}
                 onPress={() => setShowVerseModal(true)}
                 disabled={verses.length === 0}
               >
                 <Text className={`text-base font-bold mr-1 ${verses.length === 0 ? 'text-gray-500 dark:text-gray-400' : 'text-purple-700 dark:text-purple-200'}`}>
-                  第 {selectedVerse ?? 1} 节
+                  {selectedVerse ?? 1} 节
                 </Text>
                 <IconSymbol name="chevron.down" size={12} color={verses.length === 0 ? (isDark ? '#6b7280' : '#9ca3af') : (isDark ? '#c4b5fd' : '#6d28d9')} />
               </TouchableOpacity>
+            </View>
+
+            <View className="mt-3 flex-row flex-wrap items-center gap-2">
               <TouchableOpacity
                 className="px-3 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30"
                 onPress={() => setSettingsVisible(true)}
@@ -1008,17 +1059,22 @@ export default function BibleScreen() {
                   {(bookTab === 'old' ? oldTestamentBooks : newTestamentBooks).map(book => (
                     <TouchableOpacity
                       key={book.SN}
-                      className={`w-[30%] mb-3 p-3 rounded-xl items-center border ${currentBook?.SN === book.SN ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-400' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-600'}`}
+                      className={`w-[18%] mb-3 p-2 rounded-xl items-center border ${currentBook?.SN === book.SN ? 'bg-blue-600 border-blue-700 dark:bg-blue-500 dark:border-blue-400' : 'bg-white border-gray-200 dark:bg-gray-800 dark:border-gray-600'}`}
                       onPress={() => {
                         setSearchHighlightVerseId(null);
                         setCurrentBook(book);
+                        setCurrentChapter(1); // 重置到第1章
+                        setSelectedVerse(null); // 重置节选择
                         setShowBookModal(false);
-                        // Transition to chapter selection
-                        setTimeout(() => setShowChapterModal(true), 100);
+                        // 自动跳转到章选择
+                        setTimeout(() => setShowChapterModal(true), 150);
                         setBookTab(book.NewOrOld === 0 ? 'old' : 'new');
                       }}
                     >
-                      <Text className={`font-medium text-center ${currentBook?.SN === book.SN ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-200'}`}>
+                      <Text className={`text-2xl font-bold mb-1 ${currentBook?.SN === book.SN ? 'text-white dark:text-gray-900' : 'text-blue-600 dark:text-blue-400'}`}>
+                        {getBookShortName(book.FullName)}
+                      </Text>
+                      <Text className={`text-[10px] text-center leading-3 ${currentBook?.SN === book.SN ? 'text-white/90 dark:text-gray-900/90' : 'text-gray-600 dark:text-gray-300'}`}>
                         {book.FullName}
                       </Text>
                     </TouchableOpacity>
@@ -1051,7 +1107,12 @@ export default function BibleScreen() {
                       onPress={() => {
                         setSearchHighlightVerseId(null);
                         setCurrentChapter(num);
+                        setSelectedVerse(null); // 重置节选择
                         setShowChapterModal(false);
+                        // 自动跳转到节选择，等待经文加载完成
+                        setTimeout(() => {
+                          setShowVerseModal(true);
+                        }, 300);
                       }}
                     >
                       <Text className={`text-lg font-bold ${currentChapter === num ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-200'}`}>
@@ -1082,6 +1143,7 @@ export default function BibleScreen() {
                       onPress={() => {
                         setShowVerseModal(false);
                         scrollToVerse(verse.VerseSN);
+                        setShowControls(false);
                       }}
                     >
                       <Text className={`text-lg font-bold ${selectedVerse === verse.VerseSN ? 'text-white dark:text-gray-900' : 'text-gray-700 dark:text-gray-200'}`}>
