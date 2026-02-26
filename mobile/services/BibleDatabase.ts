@@ -4,7 +4,8 @@ import { Asset } from 'expo-asset';
 
 type VersionConfig = {
   dbName: string;
-  asset: number;
+  asset?: number;
+  useApi?: boolean;
   booksQuery: string;
   versesQuery: string;
   searchQuery?: string;
@@ -12,6 +13,8 @@ type VersionConfig = {
   verseParams?: (bookId: number, chapter: number) => any[];
   searchParams?: (query: string) => any[];
 };
+
+const API_BASE_URL = 'https://api.ancientpath.dpdns.org';
 
 const VERSION_CONFIG = {
   cuv: {
@@ -24,8 +27,8 @@ const VERSION_CONFIG = {
     searchQuery:
       'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? ORDER BY VolumeSN, ChapterSN, VerseSN ASC',
     bookParams: () => [],
-    verseParams: (bookId, chapter) => [bookId, chapter],
-    searchParams: (query) => [`%${query}%`],
+    verseParams: (bookId: number, chapter: number) => [bookId, chapter],
+    searchParams: (query: string) => [`%${query}%`],
   },
   asv: {
     dbName: 'ASV.db',
@@ -37,12 +40,12 @@ const VERSION_CONFIG = {
     searchQuery:
       'SELECT id AS ID, book_id AS VolumeSN, chapter AS ChapterSN, verse AS VerseSN, TRIM(text) AS Lection FROM ASV_verses WHERE text LIKE ? ORDER BY book_id, chapter, verse ASC',
     bookParams: () => [],
-    verseParams: (bookId, chapter) => [bookId, chapter],
-    searchParams: (query) => [`%${query}%`],
+    verseParams: (bookId: number, chapter: number) => [bookId, chapter],
+    searchParams: (query: string) => [`%${query}%`],
   },
   ncv: {
     dbName: 'bible_ncv.db',
-    asset: require('../assets/bible_ncv.db'),
+    useApi: true,
     booksQuery:
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
@@ -50,10 +53,10 @@ const VERSION_CONFIG = {
     searchQuery:
       'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? AND Version = "ncv" ORDER BY VolumeSN, ChapterSN, VerseSN ASC',
     bookParams: () => [],
-    verseParams: (bookId, chapter) => [bookId, chapter],
-    searchParams: (query) => [`%${query}%`],
+    verseParams: (bookId: number, chapter: number) => [bookId, chapter],
+    searchParams: (query: string) => [`%${query}%`],
   },
-} as const satisfies Record<string, VersionConfig & { searchQuery?: string; searchParams?: (query: string) => any[] }>;
+} as const as Record<string, VersionConfig>;
 
 
 export type BibleVersionKey = keyof typeof VERSION_CONFIG;
@@ -79,7 +82,18 @@ export interface BibleVerse {
 let db: SQLite.SQLiteDatabase | null = null;
 
 const ensureDatabaseReady = async (version: BibleVersionKey) => {
-  const { dbName, asset } = VERSION_CONFIG[version];
+  const config = VERSION_CONFIG[version];
+  
+  // 如果使用API，不需要本地数据库
+  if (config.useApi) {
+    return null;
+  }
+  
+  const { dbName, asset } = config;
+  if (!asset) {
+    throw new Error(`No asset defined for version: ${version}`);
+  }
+  
   const dbDir = FileSystem.documentDirectory + 'SQLite';
   const dbPath = dbDir + '/' + dbName;
 
@@ -110,9 +124,16 @@ const ensureDatabaseReady = async (version: BibleVersionKey) => {
 };
 
 export const initDatabase = async () => {
+  const config = VERSION_CONFIG[activeVersion];
+  
+  // 如果使用API，不需要初始化数据库
+  if (config.useApi) {
+    return null;
+  }
+  
   if (db) return db;
 
-  const { dbName } = VERSION_CONFIG[activeVersion];
+  const { dbName } = config;
   await ensureDatabaseReady(activeVersion);
   db = await SQLite.openDatabaseAsync(dbName);
   return db;
@@ -121,6 +142,7 @@ export const initDatabase = async () => {
 export const setActiveBibleVersion = async (version: BibleVersionKey) => {
   if (version === activeVersion) return;
 
+  // 关闭旧数据库（如果有）
   if (db) {
     try {
       await db.closeAsync();
@@ -131,14 +153,35 @@ export const setActiveBibleVersion = async (version: BibleVersionKey) => {
   }
 
   activeVersion = version;
-  await initDatabase();
+  
+  // 如果不是API模式，初始化数据库
+  const config = VERSION_CONFIG[activeVersion];
+  if (!config.useApi) {
+    await initDatabase();
+  }
 };
 
 export const getActiveBibleVersion = () => activeVersion;
 
 export const getBooks = async (): Promise<BibleBook[]> => {
-  const database = await initDatabase();
   const config = VERSION_CONFIG[activeVersion];
+  
+  if (config.useApi) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bible/books?version=${activeVersion}`);
+      if (!response.ok) throw new Error('Failed to fetch books from API');
+      const data = await response.json();
+      return data as BibleBook[];
+    } catch (error) {
+      console.error('Failed to fetch books from API:', error);
+      throw error;
+    }
+  }
+  
+  const database = await initDatabase();
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
   const rows = await database.getAllAsync<any>(
     config.booksQuery,
     config.bookParams ? config.bookParams() : []
@@ -147,8 +190,24 @@ export const getBooks = async (): Promise<BibleBook[]> => {
 };
 
 export const getVerses = async (bookId: number, chapter: number): Promise<BibleVerse[]> => {
-  const database = await initDatabase();
   const config = VERSION_CONFIG[activeVersion];
+  
+  if (config.useApi) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bible/verses?version=${activeVersion}&book=${bookId}&chapter=${chapter}`);
+      if (!response.ok) throw new Error('Failed to fetch verses from API');
+      const data = await response.json();
+      return data as BibleVerse[];
+    } catch (error) {
+      console.error('Failed to fetch verses from API:', error);
+      throw error;
+    }
+  }
+  
+  const database = await initDatabase();
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
   const rows = await database.getAllAsync<any>(
     config.versesQuery,
     config.verseParams ? config.verseParams(bookId, chapter) : [bookId, chapter]
@@ -162,11 +221,26 @@ export const getBook = async (bookId: number): Promise<BibleBook | null> => {
 };
 
 export const searchVerses = async (query: string): Promise<BibleVerse[]> => {
-  const database = await initDatabase();
   const config = VERSION_CONFIG[activeVersion];
   
   if (!config.searchQuery) return [];
+  
+  if (config.useApi) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bible/search?version=${activeVersion}&q=${encodeURIComponent(query)}`);
+      if (!response.ok) throw new Error('Failed to search verses from API');
+      const data = await response.json();
+      return data as BibleVerse[];
+    } catch (error) {
+      console.error('Failed to search verses from API:', error);
+      throw error;
+    }
+  }
 
+  const database = await initDatabase();
+  if (!database) {
+    throw new Error('Database not initialized');
+  }
   const rows = await database.getAllAsync<any>(
     config.searchQuery,
     config.searchParams ? config.searchParams(query) : []

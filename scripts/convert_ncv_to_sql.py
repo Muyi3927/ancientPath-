@@ -69,10 +69,15 @@ def extract_chapter_number(line: str) -> int | None:
     m = CHAPTER_HEADER_RE.match(line)
     return chinese_to_int(m.group(1)) if m else None
 
-# ── 节号正则：阿拉伯数字后紧跟中文字符/全角标点 ──────────────────────
+# ── 节号正则：阿拉伯数字后紧跟中文字符/全角标点，且不在括号内 ──────────────────────
+# 使用负向后顾：确保数字前面不是冒号（避免匹配"路3:23"中的23）
+# 使用负向前瞻：确保数字后面不是破折号（避免匹配"23-38"中的23和38）
 VERSE_MARKER_RE = re.compile(
-    r'(?<!第)'
+    r'(?<!\d[:：])'  # 不在"数字+冒号"后（避免匹配路3:23中的23），但允许"中文+冒号"（如"家谱：2"）
+    r'(?<!\d-)'      # 不在"数字+破折号"后（避免匹配19-23中的23）
+    r'(?<![（(])'    # 不在左括号后
     r'(\d+)'
+    r'(?![）)-])'    # 不在右括号/破折号前（避免匹配括号中的数字和范围）
     r'(?=[\u3000\u4e00-\u9fff'
     r'\uff0c\uff01\uff1f\u3002\u300c\u300e\u201c\u2018\u2019\u201d\u300f\u300d'
     r'\u3008\u3009\uff08\u2026\u3010])'
@@ -84,6 +89,18 @@ _ENDERS = '。！？\u201d\u300d\u300f'  # 。！？ " 」 』
 
 def strip_trailing_heading(text: str) -> str:
     """删除经文末尾紧跟的段落小标题（含括注参考）。"""
+    # 注意：括号内的内容可能包含句号（如"参得4:18-22）"），不应作为经文结束标记
+    # 需要找到真正的经文结束位置（不在括号内的句号）
+    
+    # 先处理右括号后面的内容
+    last_paren = max(text.rfind('）'), text.rfind(')'))
+    if last_paren > 0:
+        # 如果右括号后还有中文（小标题），删除
+        after_paren = text[last_paren + 1:].strip()
+        if after_paren and any('\u4e00' <= c <= '\u9fff' for c in after_paren):
+            text = text[:last_paren + 1]
+    
+    # 再找最后一个句尾标点
     last = max((text.rfind(c) for c in _ENDERS), default=-1)
     if 0 <= last < len(text) - 1:
         return text[:last + 1]
@@ -91,7 +108,23 @@ def strip_trailing_heading(text: str) -> str:
 
 
 def parse_chapter_content(raw: str) -> list[tuple[int, str]]:
+    # 先移除章节标题行（如"第一章"）
     content = CHAPTER_HEADER_RE.sub('', raw).strip()
+    
+    # 移除紧跟章节标题的段落小标题
+    # 段落小标题的特征：
+    # 1. 出现在第一个节号（如"1起初"）之前
+    # 2. 可能包含括号注释（如"（路3:23-38。参得4:18-22；代上3:10-17）"）
+    # 3. 以汉字开头
+    
+    # 查找第一个真正的节号：单独的数字1后面紧跟汉字
+    first_verse_pattern = re.compile(r'(?<![0-9])1(?=[\u4e00-\u9fff])')
+    first_verse_match = first_verse_pattern.search(content)
+    
+    if first_verse_match:
+        # 删除第一个节号之前的所有内容（章节小标题）
+        content = content[first_verse_match.start():]
+    
     all_matches = list(VERSE_MARKER_RE.finditer(content))
     if not all_matches:
         return []

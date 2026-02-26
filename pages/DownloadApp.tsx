@@ -38,7 +38,7 @@ export const DownloadApp: React.FC = () => {
         
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
             <a 
-              href="https://media.ancientpath.dpdns.org/app/ancientPath-ce8d4e1c-3dcb-4d52-8eca-53326f7b8cdf.apk" 
+              href="https://media.ancientpath.dpdns.org/app/application-b3b6fa33-be59-4acc-9d30-51ec8fdb8752.apk" 
               download
               className="group relative flex items-center justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-2xl transition-all transform hover:scale-[1.02] shadow-xl shadow-blue-600/30 w-full sm:w-auto"
             >
