@@ -1,4 +1,4 @@
-export type BibleVersion = 'cuv' | 'asv';
+export type BibleVersion = 'cuv' | 'asv' | 'ncv';
 
 export interface BibleBook {
   SN: number;

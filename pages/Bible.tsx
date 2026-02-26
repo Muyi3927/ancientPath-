@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
 import { getBooks, getVerses, BibleBook, BibleVerse, searchVerses, BibleVersion } from '../services/BibleService';
-import { Search, ChevronLeft, ChevronRight, Menu, X } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, Menu, X, Copy, Square, CheckSquare, Check } from 'lucide-react';
 import { LayoutContext } from '../App';
+import { AuthContext } from '../App';
 
 // 圣经书卷简写映射表
 const BOOK_SHORT_NAME_MAP: Record<string, string> = {
@@ -55,6 +56,7 @@ const getBookShortName = (fullName: string): string => {
 
 export const Bible: React.FC = () => {
   const { isMenuVisible, setMenuVisible } = useContext(LayoutContext);
+  const { isAdmin } = useContext(AuthContext);
   const [books, setBooks] = useState<BibleBook[]>([]);
   const [currentBook, setCurrentBook] = useState<BibleBook | null>(null);
   const [currentChapter, setCurrentChapter] = useState(1);
@@ -70,10 +72,62 @@ export const Bible: React.FC = () => {
   const [highlightedVerseId, setHighlightedVerseId] = useState<number | null>(null);
   const verseRefs = useRef<Map<number, HTMLDivElement>>(new Map());
 
+  // Copy mode state
+  const [isCopyMode, setIsCopyMode] = useState(false);
+  const [copyModeType, setCopyModeType] = useState<'range' | 'free'>('free');
+  const [selectedVerseIds, setSelectedVerseIds] = useState<Set<number>>(new Set());
+  const [rangeAnchorId, setRangeAnchorId] = useState<number | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
+
   // Font Helpers
   const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
   const increaseFont = () => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10));
-  
+
+  const exitCopyMode = () => {
+    setIsCopyMode(false);
+    setSelectedVerseIds(new Set());
+    setRangeAnchorId(null);
+    setCopySuccess(false);
+  };
+
+  const handleCopyVerseClick = (verse: BibleVerse) => {
+    if (copyModeType === 'free') {
+      setSelectedVerseIds(prev => {
+        const next = new Set(prev);
+        if (next.has(verse.ID)) next.delete(verse.ID);
+        else next.add(verse.ID);
+        return next;
+      });
+    } else {
+      if (rangeAnchorId === null) {
+        setRangeAnchorId(verse.ID);
+        setSelectedVerseIds(new Set([verse.ID]));
+      } else {
+        const ai = verses.findIndex(v => v.ID === rangeAnchorId);
+        const ci = verses.findIndex(v => v.ID === verse.ID);
+        const [s, e] = ai <= ci ? [ai, ci] : [ci, ai];
+        setSelectedVerseIds(new Set(verses.slice(s, e + 1).map(v => v.ID)));
+        setRangeAnchorId(null);
+      }
+    }
+  };
+
+  const handleCopySelected = async () => {
+    if (selectedVerseIds.size === 0) return;
+    const shortName = currentBook ? getBookShortName(currentBook.FullName) : '';
+    const text = verses
+      .filter(v => selectedVerseIds.has(v.ID))
+      .sort((a, b) => a.VerseSN - b.VerseSN)
+      .map(v => `【${shortName} ${currentChapter}:${v.VerseSN}】${v.Lection}`)
+      .join('\n');
+    await navigator.clipboard.writeText(text);
+    setCopySuccess(true);
+    setTimeout(() => {
+      setCopySuccess(false);
+      exitCopyMode();
+    }, 1500);
+  };
+
   // Mobile Modal States
   const [showBookModal, setShowBookModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -124,6 +178,14 @@ export const Bible: React.FC = () => {
         });
     }
   }, [currentBook, currentChapter, version]);
+
+  // 切换书卷/章节时退出复制模式，防止跨章节选择
+  useEffect(() => {
+    setIsCopyMode(false);
+    setSelectedVerseIds(new Set());
+    setRangeAnchorId(null);
+    setCopySuccess(false);
+  }, [currentBook?.SN, currentChapter]);
 
   const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -398,7 +460,7 @@ export const Bible: React.FC = () => {
         {/* Persistent Info Bar (Always visible, sits behind the main header) */}
         <div className="absolute top-0 left-0 right-0 h-8 flex justify-center items-center bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 z-0 select-none">
            <span className="text-xs font-bold text-gray-400 dark:text-gray-500">
-             {version === 'cuv' ? '和合本' : 'ASV'} · {currentBook?.FullName} {currentChapter}章
+             {version === 'cuv' ? '和合本' : version === 'ncv' ? '新译本' : 'ASV'} · {currentBook?.FullName} {currentChapter}章
            </span>
         </div>
 
@@ -441,30 +503,52 @@ export const Bible: React.FC = () => {
                 <Search className="w-5 h-5" />
             </button>
 
-            {/* Font Size Control */}
-            <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-full p-0.5 border border-gray-200 dark:border-gray-700 mr-2">
+            {/* Copy Verse Button */}
+            <button
+              onClick={() => isCopyMode ? exitCopyMode() : setIsCopyMode(true)}
+              title={isCopyMode ? '退出复制模式' : '复制经文'}
+              className={`flex items-center gap-1 px-2 md:px-3 py-1.5 rounded-lg text-sm font-medium transition-all mr-1 border ${
+                isCopyMode
+                  ? 'bg-blue-600 text-white border-blue-700 hover:bg-blue-700 shadow-sm'
+                  : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border-gray-200 dark:border-gray-700 hover:bg-gray-200 dark:hover:bg-gray-700'
+              }`}
+            >
+              <Copy className="w-4 h-4" />
+              <span className="hidden lg:inline">{isCopyMode ? '退出复制' : '复制经文'}</span>
+            </button>
+
+            {/* Font Size Control - Icon buttons matching app */}
+            <div className="flex items-center gap-0.5 md:gap-1 mr-1 md:mr-2">
                  <button 
                     onClick={decreaseFont} 
-                    className="p-1.5 w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-full transition-colors"
+                    className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="减小字体"
                  >
-                    <span className="font-bold text-xs text-gray-600 dark:text-gray-300">A-</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 text-gray-600 dark:text-gray-300">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
                  </button>
-                 <span className="text-[10px] font-mono w-8 text-center text-gray-500 dark:text-gray-400">{(fontSizeScale * 100).toFixed(0)}%</span>
+                 <span className="hidden md:inline text-[10px] font-mono px-1 text-gray-500 dark:text-gray-400">{(fontSizeScale * 100).toFixed(0)}%</span>
                  <button 
                     onClick={increaseFont} 
-                    className="p-1.5 w-8 h-8 flex items-center justify-center hover:bg-white dark:hover:bg-gray-700 rounded-full transition-colors"
+                    className="p-1.5 md:p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    title="放大字体"
                  >
-                    <span className="font-bold text-sm text-gray-600 dark:text-gray-300">A+</span>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="w-4 h-4 md:w-5 md:h-5 text-gray-600 dark:text-gray-300">
+                      <line x1="12" y1="5" x2="12" y2="19"></line>
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
                  </button>
             </div>
 
             <select
                 value={version}
                 onChange={(e) => setVersion(e.target.value as BibleVersion)}
-                className="bg-gray-100 dark:bg-gray-800 border-none rounded-md py-1 px-2 text-xs md:text-sm focus:ring-2 focus:ring-blue-500 dark:text-white mr-1 md:mr-2"
+                className="bg-gray-100 dark:bg-gray-800 border-none rounded-md py-1 px-2 text-[10px] md:text-sm focus:ring-2 focus:ring-blue-500 dark:text-white mr-1 md:mr-2"
             >
                 <option value="cuv">和合本</option>
                 <option value="asv">ASV</option>
+                {isAdmin && <option value="ncv">新译本</option>}
             </select>
 
             <button 
@@ -507,6 +591,7 @@ export const Bible: React.FC = () => {
           ref={versesContainerRef}
           className="flex-1 overflow-y-auto p-4 md:p-8 pt-16 md:pt-36 bg-white dark:bg-gray-900 cursor-pointer"
           onClick={(e) => {
+            if (isCopyMode) return; // 复制模式下不触发菜单切换
             // 如果点击的是经文容器本身（不是经文内容），则清除高亮
             if (e.target === e.currentTarget || (e.target as HTMLElement).classList.contains('max-w-3xl')) {
               if (highlightedVerseId) {
@@ -530,6 +615,8 @@ export const Bible: React.FC = () => {
             <div className="max-w-3xl mx-auto space-y-1 pb-20">
               {verses.map(verse => {
                 const isHighlighted = highlightedVerseId === verse.ID;
+                const isSelected = isCopyMode && selectedVerseIds.has(verse.ID);
+                const isAnchor = isCopyMode && copyModeType === 'range' && rangeAnchorId === verse.ID;
                 return (
                   <div 
                     key={verse.ID} 
@@ -541,21 +628,40 @@ export const Bible: React.FC = () => {
                       }
                     }}
                     onClick={(e) => {
-                      if (isHighlighted) {
+                      if (isCopyMode) {
+                        e.stopPropagation();
+                        handleCopyVerseClick(verse);
+                      } else if (isHighlighted) {
                         e.stopPropagation();
                         setHighlightedVerseId(null);
                       }
                     }}
-                    className={`flex group p-1 px-2 rounded-lg transition-all duration-500 ${
-                      isHighlighted 
-                        ? 'bg-yellow-100 dark:bg-yellow-900/30 shadow-lg cursor-pointer' 
-                        : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                    className={`flex group p-1 px-2 rounded-lg transition-all duration-300 ${
+                      isCopyMode
+                        ? `cursor-pointer select-none ${
+                            isSelected
+                              ? isAnchor
+                                ? 'bg-blue-100 dark:bg-blue-800/40 ring-1 ring-inset ring-blue-400'
+                                : 'bg-blue-50 dark:bg-blue-900/30'
+                              : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                          }`
+                        : isHighlighted 
+                          ? 'bg-yellow-100 dark:bg-yellow-900/30 shadow-lg cursor-pointer' 
+                          : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }`}
                   >
+                    {isCopyMode && (
+                      <div className="w-5 flex-shrink-0 flex items-start pt-1.5 mr-1">
+                        {isSelected
+                          ? <CheckSquare className={`w-4 h-4 ${isAnchor ? 'text-blue-700 dark:text-blue-300' : 'text-blue-500 dark:text-blue-400'}`} />
+                          : <Square className="w-4 h-4 text-gray-300 dark:text-gray-600" />
+                        }
+                      </div>
+                    )}
                     <span className="text-xs text-gray-400 w-6 md:w-8 pt-2 select-none flex-shrink-0">{verse.VerseSN}</span>
                     <p 
                       className={`leading-relaxed font-serif flex-1 transition-all duration-200 ${
-                        isHighlighted 
+                        (isCopyMode && isSelected) || isHighlighted
                           ? 'text-gray-900 dark:text-gray-100 font-medium' 
                           : 'text-gray-800 dark:text-gray-200'
                       }`}
@@ -603,6 +709,129 @@ export const Bible: React.FC = () => {
             </div>
           )}
         </div>
+
+        {/* Copy Mode Action Bar - Desktop */}
+        {isCopyMode && (
+          <div className="hidden md:flex border-t border-gray-200 dark:border-gray-700 px-6 py-3 items-center justify-between bg-white dark:bg-gray-900 shadow-[0_-4px_16px_rgba(0,0,0,0.07)] flex-shrink-0 z-10">
+            <div className="flex items-center gap-4">
+              {/* 选择模式切换 */}
+              <div className="flex items-center bg-gray-100 dark:bg-gray-800 rounded-lg p-0.5">
+                <button
+                  onClick={() => { setCopyModeType('range'); setSelectedVerseIds(new Set()); setRangeAnchorId(null); }}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    copyModeType === 'range'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  连续选择
+                </button>
+                <button
+                  onClick={() => { setCopyModeType('free'); setSelectedVerseIds(new Set()); setRangeAnchorId(null); }}
+                  className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    copyModeType === 'free'
+                      ? 'bg-white dark:bg-gray-700 text-gray-900 dark:text-white shadow-sm'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                  }`}
+                >
+                  随意选择
+                </button>
+              </div>
+              {/* 操作提示 */}
+              <span className="text-sm text-gray-500 dark:text-gray-400">
+                {copyModeType === 'range'
+                  ? (rangeAnchorId !== null
+                      ? `从第 ${verses.find(v => v.ID === rangeAnchorId)?.VerseSN} 节起 → 点击结束节`
+                      : '点击起始节')
+                  : (selectedVerseIds.size > 0 ? `已选 ${selectedVerseIds.size} 节` : '点击经文勾选')
+                }
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={handleCopySelected}
+                disabled={selectedVerseIds.size === 0}
+                className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  selectedVerseIds.size === 0
+                    ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                    : copySuccess
+                      ? 'bg-green-500 text-white scale-95'
+                      : 'bg-blue-600 text-white hover:bg-blue-700 active:scale-95 shadow-sm'
+                }`}
+              >
+                {copySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copySuccess ? '已复制！' : `复制${selectedVerseIds.size > 0 ? `（${selectedVerseIds.size}节）` : ''}`}
+              </button>
+              <button
+                onClick={exitCopyMode}
+                className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Copy Mode Action Panel - Mobile */}
+        {isCopyMode && (
+          <div className="md:hidden fixed bottom-20 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 shadow-[0_-4px_20px_rgba(0,0,0,0.15)] z-50 animate-slide-up rounded-t-2xl">
+            <div className="px-4 py-3 space-y-2">
+              {/* Status Hint */}
+              <div className="text-center text-xs text-gray-500 dark:text-gray-400">
+                {copyModeType === 'range'
+                  ? (rangeAnchorId !== null
+                      ? `从第 ${verses.find(v => v.ID === rangeAnchorId)?.VerseSN} 节起 → 点击结束节`
+                      : '点击起始节')
+                  : (selectedVerseIds.size > 0 ? `已选 ${selectedVerseIds.size} 节` : '点击经文勾选')
+                }
+              </div>
+              
+              {/* All Buttons in One Row */}
+              <div className="flex items-center gap-2 pb-safe">
+                <button
+                  onClick={() => { setCopyModeType('range'); setSelectedVerseIds(new Set()); setRangeAnchorId(null); }}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    copyModeType === 'range'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  连续
+                </button>
+                <button
+                  onClick={() => { setCopyModeType('free'); setSelectedVerseIds(new Set()); setRangeAnchorId(null); }}
+                  className={`px-3 py-2 rounded-lg text-xs font-medium transition-all ${
+                    copyModeType === 'free'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300'
+                  }`}
+                >
+                  随意
+                </button>
+                <button
+                  onClick={exitCopyMode}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 active:scale-95 transition-transform"
+                >
+                  取消
+                </button>
+                <button
+                  onClick={handleCopySelected}
+                  disabled={selectedVerseIds.size === 0}
+                  className={`flex-1 px-4 py-2 rounded-lg text-sm font-semibold transition-all flex items-center justify-center gap-1.5 ${
+                    selectedVerseIds.size === 0
+                      ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 cursor-not-allowed'
+                      : copySuccess
+                        ? 'bg-green-500 text-white scale-95'
+                        : 'bg-blue-600 text-white active:scale-95 shadow-sm'
+                  }`}
+                >
+                  {copySuccess ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  {copySuccess ? '已复制' : `复制${selectedVerseIds.size > 0 ? `(${selectedVerseIds.size})` : ''}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Mobile Book Selection Modal */}

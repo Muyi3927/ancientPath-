@@ -176,6 +176,11 @@ export default function BibleScreen() {
   // Selection Mode State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
   const [selectedVersesForAction, setSelectedVersesForAction] = useState<Set<number>>(new Set());
+  const [copyModeType, setCopyModeType] = useState<'range' | 'free'>('free');
+  const [rangeAnchorId, setRangeAnchorId] = useState<number | null>(null);
+  const [ncvUnlocked, setNcvUnlocked] = useState(false);
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState('');
 
   // Search State
   const [showSearchModal, setShowSearchModal] = useState(false);
@@ -218,8 +223,21 @@ export default function BibleScreen() {
   const translationOptions: Record<BibleVersionKey, { label: string; description: string }> = {
     cuv: { label: '和合本', description: 'Chinese Union Version' },
     asv: { label: 'ASV', description: 'American Standard Version' },
+    ncv: { label: '新译本', description: 'New Chinese Version（内测）' },
   };
-  const translationOrder: BibleVersionKey[] = ['cuv', 'asv'];
+  const translationOrder: BibleVersionKey[] = ncvUnlocked ? ['cuv', 'asv', 'ncv'] : ['cuv', 'asv'];
+
+  const handlePasswordSubmit = () => {
+    if (passwordInput === '3927') {
+      setNcvUnlocked(true);
+      setShowPasswordModal(false);
+      setPasswordInput('');
+      Alert.alert('解锁成功', '新译本已启用');
+    } else {
+      Alert.alert('密码错误', '请输入正确的口令');
+      setPasswordInput('');
+    }
+  };
 
   const getVerseKey = (verse: BibleVerse) => `${verse.VolumeSN}-${verse.ChapterSN}-${verse.VerseSN}`;
 
@@ -501,28 +519,18 @@ export default function BibleScreen() {
       const sortedSNs = Array.from(selectedVersesForAction).sort((a, b) => a - b);
       if (sortedSNs.length === 0) return;
 
-      const selectedVerseObjects = verses.filter(v => selectedVersesForAction.has(v.VerseSN));
-      const textContent = selectedVerseObjects.map(v => v.Lection.trim()).join('\n');
+      const selectedVerseObjects = verses.filter(v => selectedVersesForAction.has(v.VerseSN))
+        .sort((a, b) => a.VerseSN - b.VerseSN);
       
-      const bookLabel = currentBook?.ShortName || currentBook?.FullName || '';
-      const versionLabel = translationOptions[translation].label;
+      const bookLabel = getBookShortName(currentBook?.FullName || '');
       
-      // Format: 【BookAbbr Chapter:Start-End Version】
-      let reference = '';
-      if (sortedSNs.length === 1) {
-        reference = `【${bookLabel} ${currentChapter}:${sortedSNs[0]} ${versionLabel}】`;
-      } else {
-        // Simple range check - assumes contiguous selection for simplicity, or just lists start-end
-        // If non-contiguous, it might be better to list them, but user asked for "几-几节"
-        // Let's just take min and max for the range format as requested
-        const min = sortedSNs[0];
-        const max = sortedSNs[sortedSNs.length - 1];
-        reference = `【${bookLabel} ${currentChapter}:${min}-${max} ${versionLabel}】`;
-      }
+      // Format: 【BookAbbr Chapter:Verse】Text per line (matching web version)
+      const formatted = selectedVerseObjects
+        .map(v => `【${bookLabel} ${currentChapter}:${v.VerseSN}】${v.Lection.trim()}`)
+        .join('\n');
 
-      const formatted = `${textContent}\n${reference}`;
       await Clipboard.setStringAsync(formatted);
-      Alert.alert('已复制', '经文内容已复制到剪贴板');
+      Alert.alert('已复制', `已复制 ${sortedSNs.length} 节经文`);
       exitSelectionMode();
     } catch (error) {
       Alert.alert('复制失败', '请稍后再试');
@@ -574,21 +582,39 @@ export default function BibleScreen() {
   const exitSelectionMode = () => {
     setIsSelectionMode(false);
     setSelectedVersesForAction(new Set());
+    setRangeAnchorId(null);
   };
 
   const onVersePress = (verse: BibleVerse) => {
     if (isSelectionMode) {
-      const newSet = new Set(selectedVersesForAction);
-      if (newSet.has(verse.VerseSN)) {
-        newSet.delete(verse.VerseSN);
-        if (newSet.size === 0) {
-          exitSelectionMode();
-          return;
+      if (copyModeType === 'range') {
+        // Range mode: select all verses between anchor and current
+        if (!rangeAnchorId) {
+          setRangeAnchorId(verse.VerseSN);
+          setSelectedVersesForAction(new Set([verse.VerseSN]));
+        } else {
+          const start = Math.min(rangeAnchorId, verse.VerseSN);
+          const end = Math.max(rangeAnchorId, verse.VerseSN);
+          const range = new Set<number>();
+          for (let i = start; i <= end; i++) {
+            range.add(i);
+          }
+          setSelectedVersesForAction(range);
         }
       } else {
-        newSet.add(verse.VerseSN);
+        // Free mode: toggle individual verse
+        const newSet = new Set(selectedVersesForAction);
+        if (newSet.has(verse.VerseSN)) {
+          newSet.delete(verse.VerseSN);
+          if (newSet.size === 0) {
+            exitSelectionMode();
+            return;
+          }
+        } else {
+          newSet.add(verse.VerseSN);
+        }
+        setSelectedVersesForAction(newSet);
       }
-      setSelectedVersesForAction(newSet);
     } else {
       setSelectedVerse(verse.VerseSN);
       toggleControls(); // Re-enabled toggle on verse tap
@@ -890,6 +916,7 @@ export default function BibleScreen() {
               <TouchableOpacity
                 className="flex-row items-center px-3 py-2 rounded-full bg-orange-100 dark:bg-orange-900/40 border border-orange-200 dark:border-orange-600"
                 onPress={() => setShowTranslationModal(true)}
+                onLongPress={() => !ncvUnlocked && setShowPasswordModal(true)}
               >
                 <Text className="text-base font-bold text-orange-700 dark:text-orange-200 mr-1">
                   {translationOptions[translation].label}
@@ -929,6 +956,21 @@ export default function BibleScreen() {
             </View>
 
             <View className="mt-3 flex-row flex-wrap items-center gap-2">
+              <TouchableOpacity
+                className={`px-3 py-2 rounded-full ${isSelectionMode ? 'bg-green-100 dark:bg-green-900/40' : 'bg-gray-100 dark:bg-gray-800'}`}
+                onPress={() => {
+                  if (isSelectionMode) {
+                    setIsSelectionMode(false);
+                    setSelectedVersesForAction(new Set());
+                    setRangeAnchorId(null);
+                  } else {
+                    setIsSelectionMode(true);
+                  }
+                }}
+              >
+                <IconSymbol name="doc.on.doc" size={20} color={isSelectionMode ? (isDark ? '#86efac' : '#16a34a') : (isDark ? '#9ca3af' : '#6b7280')} />
+              </TouchableOpacity>
+
               <TouchableOpacity
                 className="px-3 py-2 rounded-full bg-blue-50 dark:bg-blue-900/30"
                 onPress={() => setSettingsVisible(true)}
@@ -1210,38 +1252,124 @@ export default function BibleScreen() {
       {/* Selection Action Bar */}
       {isSelectionMode && (
         <View 
-          className="absolute bottom-8 left-4 right-4 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 p-4 flex-row justify-around items-center"
-          style={{ paddingBottom: 16 }}
+          className="absolute left-4 right-4 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+          style={{ bottom: 80 + safeBottom }}
         >
-          <TouchableOpacity 
-            className="flex-1 items-center justify-center"
-            onPress={handleCopySelected}
-          >
-            <IconSymbol name="doc.on.doc" size={28} color={Colors[colorScheme ?? 'light'].tint} />
-            <Text className="text-sm mt-2 font-bold text-blue-600 dark:text-blue-400 text-center">复制</Text>
-          </TouchableOpacity>
+          {/* Status hint */}
+          <View className="px-4 pt-3 pb-2">
+            <Text className="text-xs text-center text-gray-500 dark:text-gray-400">
+              {copyModeType === 'range' 
+                ? (rangeAnchorId === null ? '点击起始节' : `已选 ${selectedVersesForAction.size} 节`)
+                : `已选 ${selectedVersesForAction.size} 节`
+              }
+            </Text>
+          </View>
           
-          <View className="w-[1px] h-10 bg-gray-200 dark:bg-gray-700 mx-4" />
-          
-          <TouchableOpacity 
-            className="flex-1 items-center justify-center"
-            onPress={handleHighlightSelected}
-          >
-            <IconSymbol name="highlighter" size={28} color={Colors[colorScheme ?? 'light'].tint} />
-            <Text className="text-sm mt-2 font-bold text-blue-600 dark:text-blue-400 text-center">高亮</Text>
-          </TouchableOpacity>
+          {/* Controls */}
+          <View className="px-3 pb-3">
+            <View className="flex-row items-center gap-2">
+              {/* Mode toggle buttons */}
+              <TouchableOpacity
+                className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'range' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
+                onPress={() => {
+                  setCopyModeType('range');
+                  setRangeAnchorId(null);
+                  setSelectedVersesForAction(new Set());
+                }}
+              >
+                <Text className={`text-xs font-semibold ${copyModeType === 'range' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
+                  连续
+                </Text>
+              </TouchableOpacity>
 
-          <View className="w-[1px] h-10 bg-gray-200 dark:bg-gray-700 mx-4" />
+              <TouchableOpacity
+                className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'free' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
+                onPress={() => {
+                  setCopyModeType('free');
+                  setRangeAnchorId(null);
+                  setSelectedVersesForAction(new Set());
+                }}
+              >
+                <Text className={`text-xs font-semibold ${copyModeType === 'free' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
+                  随意
+                </Text>
+              </TouchableOpacity>
 
-          <TouchableOpacity 
-            className="flex-1 items-center justify-center"
-            onPress={exitSelectionMode}
-          >
-            <IconSymbol name="xmark" size={28} color={Colors[colorScheme ?? 'light'].icon} />
-            <Text className="text-sm mt-2 font-bold text-gray-500 dark:text-gray-400 text-center">取消</Text>
-          </TouchableOpacity>
+              {/* Action buttons */}
+              <TouchableOpacity 
+                className="flex-1 flex-row items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-700 py-2 rounded-lg"
+                onPress={exitSelectionMode}
+              >
+                <IconSymbol name="xmark" size={16} color={isDark ? '#d1d5db' : '#6b7280'} />
+                <Text className="text-sm font-semibold text-gray-600 dark:text-gray-300">取消</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity 
+                className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg ${selectedVersesForAction.size > 0 ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                onPress={handleCopySelected}
+                disabled={selectedVersesForAction.size === 0}
+              >
+                <IconSymbol name="doc.on.doc" size={16} color="#fff" />
+                <Text className="text-sm font-semibold text-white">复制</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       )}
+
+      {/* Password Modal for NCV Unlock */}
+      <Modal
+        visible={showPasswordModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPasswordModal(false);
+          setPasswordInput('');
+        }}
+      >
+        <View className="flex-1 justify-center items-center bg-black/50">
+          <View className="bg-white dark:bg-gray-800 rounded-2xl p-6 mx-6 w-80 shadow-xl">
+            <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">
+              解锁新译本
+            </Text>
+            <Text className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              请输入口令以启用新译本（内测版）
+            </Text>
+            <TextInput
+              className="border border-gray-300 dark:border-gray-600 rounded-lg px-4 py-3 text-base text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 mb-4"
+              placeholder="输入口令"
+              placeholderTextColor="#9ca3af"
+              secureTextEntry={true}
+              keyboardType="number-pad"
+              value={passwordInput}
+              onChangeText={setPasswordInput}
+              onSubmitEditing={handlePasswordSubmit}
+              autoFocus={true}
+            />
+            <View className="flex-row gap-3">
+              <TouchableOpacity
+                className="flex-1 bg-gray-200 dark:bg-gray-700 rounded-lg py-3"
+                onPress={() => {
+                  setShowPasswordModal(false);
+                  setPasswordInput('');
+                }}
+              >
+                <Text className="text-center text-base font-semibold text-gray-700 dark:text-gray-300">
+                  取消
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                className="flex-1 bg-blue-600 dark:bg-blue-500 rounded-lg py-3"
+                onPress={handlePasswordSubmit}
+              >
+                <Text className="text-center text-base font-semibold text-white">
+                  确认
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Reading Settings Modal */}
       <Modal

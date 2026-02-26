@@ -40,6 +40,19 @@ const VERSION_CONFIG = {
     verseParams: (bookId, chapter) => [bookId, chapter],
     searchParams: (query) => [`%${query}%`],
   },
+  ncv: {
+    dbName: 'bible_ncv.db',
+    asset: require('../assets/bible_ncv.db'),
+    booksQuery:
+      'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
+    versesQuery:
+      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE VolumeSN = ? AND ChapterSN = ? AND Version = "ncv" ORDER BY VerseSN ASC',
+    searchQuery:
+      'SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection FROM Bible WHERE Lection LIKE ? AND Version = "ncv" ORDER BY VolumeSN, ChapterSN, VerseSN ASC',
+    bookParams: () => [],
+    verseParams: (bookId, chapter) => [bookId, chapter],
+    searchParams: (query) => [`%${query}%`],
+  },
 } as const satisfies Record<string, VersionConfig & { searchQuery?: string; searchParams?: (query: string) => any[] }>;
 
 
