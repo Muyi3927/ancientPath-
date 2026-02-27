@@ -15,6 +15,8 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { isFavorite, toggleFavorite, getFavorites } from '../../services/favoriteService';
 import { getHighlights, addHighlight, removeHighlight, type Highlight } from '../../services/highlightService';
 import * as Clipboard from 'expo-clipboard';
+import BibleVerseModal from '../../components/BibleVerseModal';
+import { BibleVersionKey } from '../../services/BibleDatabase';
 
 const HYMN_FIXED_COVER = "https://media.ancientpath.dpdns.org/images/Hymns/hymncover.webp";
 
@@ -80,6 +82,11 @@ export default function PostDetailScreen() {
   const [showHighlightModal, setShowHighlightModal] = useState(false);
   const [selectedText, setSelectedText] = useState('');
   const [showImageGuide, setShowImageGuide] = useState(false);
+  
+  // Bible verse modal states
+  const [showBibleModal, setShowBibleModal] = useState(false);
+  const [selectedBibleReference, setSelectedBibleReference] = useState('');
+  const [bibleVersion, setBibleVersion] = useState<BibleVersionKey>('cuv');
 
   useEffect(() => {
     const loadImageGuideState = async () => {
@@ -232,6 +239,42 @@ export default function PostDetailScreen() {
             </Pressable>
         );
     };
+    
+    const AnchorRenderer = ({ tnode }: any) => {
+        const href = tnode.attributes?.href;
+        const bibleRef = tnode.attributes?.['data-bible-ref'];
+        
+        // 获取链接文本
+        const getText = (node: any): string => {
+            if (!node) return '';
+            if (node.type === 'text') return node.data || '';
+            if (node.children && node.children.length > 0) {
+                return node.children.map((child: any) => getText(child)).join('');
+            }
+            return '';
+        };
+        
+        const linkText = getText(tnode);
+        
+        // 如果是圣经引用链接
+        if (href && href.startsWith('#bible:') && bibleRef) {
+            return (
+                <Text 
+                    onPress={() => {
+                        const decodedRef = decodeURIComponent(bibleRef);
+                        setSelectedBibleReference(decodedRef);
+                        setShowBibleModal(true);
+                    }}
+                    style={{ color: '#2563eb', textDecorationLine: 'underline' }}
+                >
+                    {linkText}
+                </Text>
+            );
+        }
+        
+        // 普通链接
+        return <Text style={{ color: '#2563eb', textDecorationLine: 'underline' }}>{linkText}</Text>;
+    };
 
     return {
         h1: HeadingRenderer,
@@ -240,7 +283,8 @@ export default function PostDetailScreen() {
         h4: HeadingRenderer,
         h5: HeadingRenderer,
         h6: HeadingRenderer,
-        img: ImageRenderer
+        img: ImageRenderer,
+        a: AnchorRenderer
     };
   }, [isDark, originalImageUrls, showImageGuide]);
 
@@ -538,6 +582,95 @@ export default function PostDetailScreen() {
     }
   }, [tocMaxLevel, tocVisible, scrollTocToCurrentPosition]);
 
+  // 验证有效的书卷名
+  const VALID_BOOK_NAMES = new Set([
+    '太', '马太福音', '可', '马可福音', '路', '路加福音', '约', '约翰福音',
+    '徒', '使徒行传', '罗', '罗马书', '林前', '哥林多前书', '林后', '哥林多后书',
+    '加', '加拉太书', '弗', '以弗所书', '腓', '腓立比书', '西', '歌罗西书',
+    '帖前', '帖撒罗尼迦前书', '帖后', '帖撒罗尼迦后书', '提前', '提摩太前书',
+    '提后', '提摩太后书', '多', '提多书', '门', '腓利门书', '来', '希伯来书',
+    '雅', '雅各书', '彼前', '彼得前书', '彼后', '彼得后书',
+    '约一', '约翰一书', '约壹', '约二', '约翰二书', '约贰', '约三', '约翰三书', '约叁',
+    '犹', '犹大书', '启', '启示录',
+    '创', '创世记', '出', '出埃及记', '利', '利未记', '民', '民数记', '申', '申命记',
+    '书', '约书亚记', '士', '士师记', '得', '路得记',
+    '撒上', '撒母耳记上', '撒下', '撒母耳记下', '王上', '列王纪上', '王下', '列王纪下',
+    '代上', '历代志上', '代下', '历代志下', '拉', '以斯拉记', '尼', '尼希米记',
+    '斯', '以斯帖记', '伯', '约伯记', '诗', '诗篇', '箴', '箴言', '传', '传道书',
+    '歌', '雅歌', '赛', '以赛亚书', '耶', '耶利米书', '哀', '耶利米哀歌',
+    '结', '以西结书', '但', '但以理书', '何', '何西阿书', '珥', '约珥书',
+    '摩', '阿摩司书', '俄', '俄巴底亚书', '拿', '约拿书', '弥', '弥迦书',
+    '鸿', '那鸿书', '哈', '哈巴谷书', '番', '西番雅书', '该', '哈该书',
+    '玛', '玛拉基书', '撒迦', '撒迦利亚书'
+  ]);
+
+  // 识别经文引用的正则表达式（与web端一致）
+  const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})(?:[章]?[ \t\u3000]*(?:中|上|下)?[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
+
+  const processHTMLWithBibleLinks = (html: string) => {
+    // 在HTML中查找文本节点并添加经文链接
+    // 需要避免处理已经在标签内的文本
+    return html.replace(/>([^<]+)</g, (match, text) => {
+      const processedText = text.replace(BIBLE_REFERENCE_REGEX, (match: string, book: string, chapter: string, versePart: string) => {
+        const normalizedBook = String(book || '').trim();
+        const normalizedChapter = String(chapter || '').trim();
+        
+        // 验证书卷名是否有效
+        if (!normalizedBook || !normalizedChapter || !VALID_BOOK_NAMES.has(normalizedBook)) {
+          return match;
+        }
+
+        const trimmedMatch = match.trim();
+        const bracketMatch = trimmedMatch.match(/^([《【（])([\s\S]*)([》】）])$/);
+        const hasBrackets = !!bracketMatch;
+        const innerText = hasBrackets && bracketMatch ? bracketMatch[2].trim() : trimmedMatch;
+
+        // 拆分同卷多个引用，保留分隔符
+        const parts = innerText.split(/([，,])/);
+
+        let firstSegmentHandled = false;
+        const linkedParts = parts.map((part: string) => {
+          const trimmed = part.trim();
+          if (!trimmed || trimmed === '，' || trimmed === ',') {
+            return part;
+          }
+
+          if (!firstSegmentHandled) {
+            firstSegmentHandled = true;
+            if (versePart) {
+              const cleanedVersePart = String(versePart).replace(/[ \t\u3000]+/g, '');
+              const normalizedRef = `${normalizedBook}${normalizedChapter}:${cleanedVersePart}`
+                .replace(/：/g, ':');
+              return `<a href="#bible:${encodeURIComponent(normalizedRef)}" data-bible-ref="${encodeURIComponent(normalizedRef)}">${part}</a>`;
+            } else {
+              // 没有节号，只有章号
+              const normalizedRef = `${normalizedBook}${normalizedChapter}`
+                .replace(/：/g, ':');
+              return `<a href="#bible:${encodeURIComponent(normalizedRef)}" data-bible-ref="${encodeURIComponent(normalizedRef)}">${part}</a>`;
+            }
+          }
+
+          const segmentMatch = trimmed.match(/^(?:第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?[ \t\u3000]*(?:中|上|下)?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)?\s*[节]?$/);
+          if (!segmentMatch) {
+            return part;
+          }
+
+          const segChapter = (segmentMatch[1] || normalizedChapter).trim();
+          const segVersePart = segmentMatch[2] ? segmentMatch[2].replace(/[ \t\u3000]+/g, '') : '';
+          const normalizedRef = segVersePart
+            ? `${normalizedBook}${segChapter}:${segVersePart}`.replace(/：/g, ':')
+            : `${normalizedBook}${segChapter}`.replace(/：/g, ':');
+          return `<a href="#bible:${encodeURIComponent(normalizedRef)}" data-bible-ref="${encodeURIComponent(normalizedRef)}">${part}</a>`;
+        });
+
+        const linkedText = linkedParts.join('');
+        return hasBrackets && bracketMatch ? `${bracketMatch[1]}${linkedText}${bracketMatch[3]}` : linkedText;
+      });
+      
+      return `>${processedText}<`;
+    });
+  };
+
   const htmlContent = useMemo(() => {
       if (!post) return '';
       
@@ -551,7 +684,11 @@ export default function PostDetailScreen() {
           return `<h${depth} id="${id}">${text}</h${depth}>`;
       };
       
-      return marked.parse(post.content, { renderer });
+      // 先用marked解析markdown
+      const parsedHTML = marked.parse(post.content, { renderer }) as string;
+      
+      // 然后在HTML中添加经文链接
+      return processHTMLWithBibleLinks(parsedHTML);
   }, [post]);
 
   if (loading) {
@@ -1118,6 +1255,15 @@ export default function PostDetailScreen() {
             )}
 
             onLongPress={() => setControlsVisible(!controlsVisible)}
+        />
+        
+        {/* Bible Verse Modal */}
+        <BibleVerseModal
+          isOpen={showBibleModal}
+          onClose={() => setShowBibleModal(false)}
+          reference={selectedBibleReference}
+          version={bibleVersion}
+          onVersionChange={setBibleVersion}
         />
       </View>
     </>

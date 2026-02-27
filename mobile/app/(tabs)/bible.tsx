@@ -1250,72 +1250,91 @@ export default function BibleScreen() {
       </Animated.View>
 
       {/* Selection Action Bar */}
-      {isSelectionMode && (
-        <View 
-          className="absolute left-4 right-4 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
-          style={{ bottom: 80 + safeBottom }}
-        >
-          {/* Status hint */}
-          <View className="px-4 pt-3 pb-2">
-            <Text className="text-xs text-center text-gray-500 dark:text-gray-400">
-              {copyModeType === 'range' 
-                ? (rangeAnchorId === null ? '点击起始节' : `已选 ${selectedVersesForAction.size} 节`)
-                : `已选 ${selectedVersesForAction.size} 节`
-              }
-            </Text>
-          </View>
-          
-          {/* Controls */}
-          <View className="px-3 pb-3">
-            <View className="flex-row items-center gap-2">
-              {/* Mode toggle buttons */}
-              <TouchableOpacity
-                className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'range' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
-                onPress={() => {
-                  setCopyModeType('range');
-                  setRangeAnchorId(null);
-                  setSelectedVersesForAction(new Set());
-                }}
-              >
-                <Text className={`text-xs font-semibold ${copyModeType === 'range' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
-                  连续
-                </Text>
-              </TouchableOpacity>
+      {isSelectionMode && (() => {
+        // Check if all selected verses are highlighted
+        const allHighlighted = selectedVersesForAction.size > 0 && Array.from(selectedVersesForAction).every(sn => {
+          const verse = verses.find(v => v.VerseSN === sn);
+          return verse ? !!highlightedVerses[getVerseKey(verse)] : false;
+        });
 
-              <TouchableOpacity
-                className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'free' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
-                onPress={() => {
-                  setCopyModeType('free');
-                  setRangeAnchorId(null);
-                  setSelectedVersesForAction(new Set());
-                }}
-              >
-                <Text className={`text-xs font-semibold ${copyModeType === 'free' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
-                  随意
-                </Text>
-              </TouchableOpacity>
+        return (
+          <View 
+            className="absolute left-4 right-4 z-50 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700 overflow-hidden"
+            style={{ bottom: 80 + safeBottom }}
+          >
+            {/* Status hint */}
+            <View className="px-4 pt-3 pb-2">
+              <Text className="text-xs text-center text-gray-500 dark:text-gray-400">
+                {copyModeType === 'range' 
+                  ? (rangeAnchorId === null ? '点击起始节' : `已选 ${selectedVersesForAction.size} 节`)
+                  : `已选 ${selectedVersesForAction.size} 节`
+                }
+              </Text>
+            </View>
+            
+            {/* Controls */}
+            <View className="px-3 py-3 space-y-4">
+              {/* Mode toggle buttons */}
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity
+                  className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'range' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
+                  onPress={() => {
+                    setCopyModeType('range');
+                    setRangeAnchorId(null);
+                    setSelectedVersesForAction(new Set());
+                  }}
+                >
+                  <Text className={`text-xs font-semibold ${copyModeType === 'range' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
+                    连续
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  className={`px-2 py-1.5 rounded-lg border ${copyModeType === 'free' ? 'bg-blue-100 border-blue-300 dark:bg-blue-900/40 dark:border-blue-500' : 'bg-gray-100 border-gray-300 dark:bg-gray-700 dark:border-gray-600'}`}
+                  onPress={() => {
+                    setCopyModeType('free');
+                    setRangeAnchorId(null);
+                    setSelectedVersesForAction(new Set());
+                  }}
+                >
+                  <Text className={`text-xs font-semibold ${copyModeType === 'free' ? 'text-blue-700 dark:text-blue-200' : 'text-gray-600 dark:text-gray-300'}`}>
+                    随意
+                  </Text>
+                </TouchableOpacity>
+              </View>
 
               {/* Action buttons */}
-              <TouchableOpacity 
-                className="flex-1 flex-row items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-700 py-2 rounded-lg"
-                onPress={exitSelectionMode}
-              >
-                <IconSymbol name="xmark" size={16} color={isDark ? '#d1d5db' : '#6b7280'} />
-                <Text className="text-sm font-semibold text-gray-600 dark:text-gray-300">取消</Text>
-              </TouchableOpacity>
+              <View className="flex-row items-center gap-2">
+                <TouchableOpacity 
+                  className="flex-1 flex-row items-center justify-center gap-1.5 bg-gray-100 dark:bg-gray-700 py-2 rounded-lg"
+                  onPress={exitSelectionMode}
+                >
+                  <IconSymbol name="xmark" size={16} color={isDark ? '#d1d5db' : '#6b7280'} />
+                  <Text className="text-sm font-semibold text-gray-600 dark:text-gray-300">取消</Text>
+                </TouchableOpacity>
 
-              <TouchableOpacity 
-                className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg ${selectedVersesForAction.size > 0 ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
-                onPress={handleCopySelected}
-                disabled={selectedVersesForAction.size === 0}
-              >
-                <IconSymbol name="doc.on.doc" size={16} color="#fff" />
-                <Text className="text-sm font-semibold text-white">复制</Text>
-              </TouchableOpacity>
+                <TouchableOpacity 
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg ${selectedVersesForAction.size > 0 ? (allHighlighted ? 'bg-gray-500 dark:bg-gray-600' : 'bg-amber-500 dark:bg-amber-600') : 'bg-gray-300 dark:bg-gray-600'}`}
+                  onPress={handleHighlightSelected}
+                  disabled={selectedVersesForAction.size === 0}
+                >
+                  <IconSymbol name={allHighlighted ? "star" : "star.fill"} size={16} color="#fff" />
+                  <Text className="text-sm font-semibold text-white">{allHighlighted ? '取消高亮' : '高亮'}</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  className={`flex-1 flex-row items-center justify-center gap-1.5 py-2 rounded-lg ${selectedVersesForAction.size > 0 ? 'bg-blue-600 dark:bg-blue-500' : 'bg-gray-300 dark:bg-gray-600'}`}
+                  onPress={handleCopySelected}
+                  disabled={selectedVersesForAction.size === 0}
+                >
+                  <IconSymbol name="doc.on.doc" size={16} color="#fff" />
+                  <Text className="text-sm font-semibold text-white">复制</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
-        </View>
-      )}
+        );
+      })()}
 
       {/* Password Modal for NCV Unlock */}
       <Modal

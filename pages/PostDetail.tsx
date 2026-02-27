@@ -4,6 +4,7 @@ import { format } from 'date-fns';
 import { BlogPost, Category } from '../types';
 import { AuthContext } from '../App';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import BibleVerseModal from '../components/BibleVerseModal';
 import { ArrowLeft, Calendar, Share2, Tag, Type, Volume2, Edit, Gauge, Trash2, List, X, FileDown, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface PostDetailProps {
@@ -21,6 +22,11 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   
   // Audio State
   const audioRef = useRef<HTMLAudioElement>(null);
+  
+  // Bible Verse Modal State
+  const [showBibleModal, setShowBibleModal] = useState(false);
+  const [selectedBibleReference, setSelectedBibleReference] = useState('');
+  const [bibleVersion, setBibleVersion] = useState<'cuv' | 'asv' | 'ncv'>('cuv');
   
   // Accessibility: Font Size State
   // Default to 1.2 for better readability
@@ -386,6 +392,10 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
               wordSpacing: '0.05em'
             }}
             onImageClick={handleImageClick}
+            onBibleVerseClick={(reference) => {
+              setSelectedBibleReference(reference);
+              setShowBibleModal(true);
+            }}
           />
 
         </div>
@@ -569,6 +579,16 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           </div>
         </div>
       )}
+
+      {/* Bible Verse Modal */}
+      <BibleVerseModal 
+        isOpen={showBibleModal}
+        onClose={() => setShowBibleModal(false)}
+        reference={selectedBibleReference}
+        version={bibleVersion}
+        onVersionChange={setBibleVersion}
+        isAdmin={isAdmin}
+      />
     </div>
   );
 };
