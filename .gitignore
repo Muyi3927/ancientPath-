@@ -32,3 +32,6 @@ backend/.dev.vars
 .env.*
 !.env.example
 CosyVoice/
+
+# Backups
+backups/

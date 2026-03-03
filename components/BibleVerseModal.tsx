@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
-import { getVerses, getBooks, BibleVerse, BibleVersion } from '../services/BibleService';
+import { getVerses, getBooks, BibleVerse, BibleVersion, parseVerseLection } from '../services/BibleService';
 
 interface BibleVerseModalProps {
   isOpen: boolean;
@@ -79,8 +79,8 @@ const BOOK_NAME_MAP: Record<string, number> = {
   '哈': 35, '哈巴谷书': 35,
   '番': 36, '西番雅书': 36,
   '该': 37, '哈该书': 37,
-  '玛': 38, '玛拉基书': 38,
-  '撒迦': 39, '撒迦利亚书': 39,
+  '亚': 38, '撒迦': 38, '撒迦利亚书': 38,
+  '玛': 39, '玛拉基书': 39,
 };
 
 // ID到书卷名的映射（用于显示）
@@ -92,7 +92,7 @@ const BOOK_ID_TO_NAME: Record<number, string> = {
   21: '传道书', 22: '雅歌', 23: '以赛亚书', 24: '耶利米书', 25: '耶利米哀歌',
   26: '以西结书', 27: '但以理书', 28: '何西阿书', 29: '约珥书', 30: '阿摩司书',
   31: '俄巴底亚书', 32: '约拿书', 33: '弥迦书', 34: '那鸿书', 35: '哈巴谷书',
-  36: '西番雅书', 37: '哈该书', 38: '玛拉基书', 39: '撒迦利亚书', 40: '马太福音',
+  36: '西番雅书', 37: '哈该书', 38: '撒迦利亚书', 39: '玛拉基书', 40: '马太福音',
   41: '马可福音', 42: '路加福音', 43: '约翰福音', 44: '使徒行传', 45: '罗马书',
   46: '哥林多前书', 47: '哥林多后书', 48: '加拉太书', 49: '以弗所书', 50: '腓立比书',
   51: '歌罗西书', 52: '帖撒罗尼迦前书', 53: '帖撒罗尼迦后书', 54: '提摩太前书',
@@ -197,7 +197,14 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
   const handleCopy = () => {
     const text = verses
       .filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse)
-      .map(v => `【${bookName} ${chapter}:${v.VerseSN}】${v.Lection}`)
+      .map(v => {
+        const parsed = parseVerseLection(v.Lection);
+        const verseHeader = `【${bookName} ${chapter}:${v.VerseSN}】`;
+        if (parsed.hasBilingual) {
+          return `${verseHeader}\n${parsed.chinese}\n${parsed.english}`;
+        }
+        return `${verseHeader}${parsed.chinese}`;
+      })
       .join('\n');
     
     navigator.clipboard.writeText(text).then(() => {
@@ -231,6 +238,7 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
             >
               <option value="cuv">和合本</option>
+              <option value="bilingual">中英对照</option>
               <option value="asv">美标本</option>
               {isAdmin && <option value="ncv">新译本</option>}
             </select>
@@ -260,9 +268,25 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
                   <span className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 text-lg">
                     {verse.VerseSN}
                   </span>
-                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-lg">
-                    {verse.Lection}
-                  </p>
+                  <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-lg flex-1">
+                    {(() => {
+                      const parsed = parseVerseLection(verse.Lection);
+                      return parsed.hasBilingual ? (
+                        <>
+                          <p>{parsed.chinese}</p>
+                          <p style={{ 
+                            fontStyle: 'italic',
+                            color: 'rgb(107, 114, 128)',
+                            marginTop: '0.25rem'
+                          }} className="dark:text-gray-400">
+                            {parsed.english}
+                          </p>
+                        </>
+                      ) : (
+                        <p>{parsed.chinese}</p>
+                      );
+                    })()}
+                  </div>
                 </div>
               ))}
             </div>

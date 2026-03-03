@@ -31,56 +31,92 @@ const VALID_BOOK_NAMES = new Set([
   '结', '以西结书', '但', '但以理书', '何', '何西阿书', '珥', '约珥书',
   '摩', '阿摩司书', '俄', '俄巴底亚书', '拿', '约拿书', '弥', '弥迦书',
   '鸿', '那鸿书', '哈', '哈巴谷书', '番', '西番雅书', '该', '哈该书',
-  '玛', '玛拉基书', '撒迦', '撒迦利亚书'
+  '亚', '撒迦', '撒迦利亚书', '玛', '玛拉基书', 
 ]);
 
 // 识别经文引用的正则表达式
-// 格式：[符号]书卷名[符号]第?章号[章]?第?[:：]?节号[-节号]?[节]?[，,...]
+// 格式：[符号]书卷名[符号]第?章号[章]?[中上下]?第?[:：]?节号[-节号]?[节]?[，,...]
 // 支持：章后紧跟“中/上/下”等字，支持“章 9 节”无冒号
 // 注意：只匹配水平空白（空格、制表符），避免跨越换行
-const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})(?:[章]?[ \t\u3000]*(?:中|上|下)?[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
+const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?(?:[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,;；][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '', style, onImageClick, onBibleVerseClick }) => {
   // 预处理内容：将经文引用替换为 markdown 链接
   const processedContent = useCallback(() => {
-    const normalizedContent = content.replace(/([^\s])([ \t\u3000]{2,})([^\s])/g, '$1  \n$3');
-    return normalizedContent.replace(BIBLE_REFERENCE_REGEX, (match, book, chapter, versePart) => {
-      const normalizedBook = String(book || '').trim();
+    // 先处理经文引用（避免双空格规范化将经文引用内的空格替换为换行）
+    const bibleProcessed = content.replace(BIBLE_REFERENCE_REGEX, (match, book, chapter, versePart) => {
+      let normalizedBook = String(book || '').trim();
       const normalizedChapter = String(chapter || '').trim();
       
-      // 验证书卷名是否有效
-      if (!normalizedBook || !normalizedChapter || !VALID_BOOK_NAMES.has(normalizedBook)) {
-        return match;
+      // 验证书卷名是否有效，如果不有效则尝试从左截取找有效后缀
+      // 例如"参看罗马书"中，贪婪匹配会捕获"参看罗马书"，需要找到"罗马书"
+      // 去除书名尾部的“第”字（正则贪婪匹配可能吞入）
+      if (normalizedBook.endsWith('第')) {
+        normalizedBook = normalizedBook.slice(0, -1);
+      }
+      let bookPrefix = '';
+      if (!normalizedBook || !normalizedChapter) return match;
+      if (!VALID_BOOK_NAMES.has(normalizedBook)) {
+        let found = false;
+        for (let i = 1; i < normalizedBook.length; i++) {
+          const suffix = normalizedBook.substring(i);
+          if (VALID_BOOK_NAMES.has(suffix)) {
+            bookPrefix = normalizedBook.substring(0, i);
+            normalizedBook = suffix;
+            found = true;
+            break;
+          }
+        }
+        if (!found) return match;
       }
 
       const trimmedMatch = match.trim();
       const bracketMatch = trimmedMatch.match(/^([《【（])([\s\S]*)([》】）])$/);
       const hasBrackets = !!bracketMatch;
-      const innerText = hasBrackets && bracketMatch ? bracketMatch[2].trim() : trimmedMatch;
+      let innerText = hasBrackets && bracketMatch ? bracketMatch[2].trim() : trimmedMatch;
+
+      // 去除链接文本中的前缀，避免重复
+      if (bookPrefix && innerText.startsWith(bookPrefix)) {
+        innerText = innerText.substring(bookPrefix.length);
+      }
 
       // 拆分同卷多个引用，保留分隔符
-      const parts = innerText.split(/([，,])/);
+      // 逗号(,，)：同一章内的不同节；分号(;；)：不同章
+      const parts = innerText.split(/([，,;；])/);
 
       let firstSegmentHandled = false;
+      let lastSeparator = '';
+      let currentChapter = normalizedChapter;
       const linkedParts = parts.map((part) => {
         const trimmed = part.trim();
-        if (!trimmed || trimmed === '，' || trimmed === ',') {
+        if (!trimmed) return part;
+        if (/^[，,;；]$/.test(trimmed)) {
+          lastSeparator = trimmed;
           return part;
         }
 
         if (!firstSegmentHandled) {
           firstSegmentHandled = true;
+          currentChapter = normalizedChapter;
           if (versePart) {
             const cleanedVersePart = String(versePart).replace(/[ \t\u3000]+/g, '');
             const normalizedRef = `${normalizedBook}${normalizedChapter}:${cleanedVersePart}`
               .replace(/：/g, ':');
             return `[${part}](#bible:${encodeURIComponent(normalizedRef)})`;
           } else {
-            // 没有节号，只有章号，创建链接为"书卷章"
             const normalizedRef = `${normalizedBook}${normalizedChapter}`
               .replace(/：/g, ':');
             return `[${part}](#bible:${encodeURIComponent(normalizedRef)})`;
           }
+        }
+
+        const isComma = lastSeparator === ',' || lastSeparator === '，';
+
+        // 逗号后的裸数字或数字范围（如 14 或 14-15）→ 同章的节号
+        if (isComma && /^\d{1,3}(?:\s*-\s*\d{1,3})?$/.test(trimmed)) {
+          const segVersePart = trimmed.replace(/\s+/g, '');
+          const normalizedRef = `${normalizedBook}${currentChapter}:${segVersePart}`.replace(/：/g, ':');
+          return `[${part}](#bible:${encodeURIComponent(normalizedRef)})`;
         }
 
         const segmentMatch = trimmed.match(/^(?:第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?[ \t\u3000]*(?:中|上|下)?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)?\s*[节]?$/);
@@ -88,7 +124,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
           return part;
         }
 
-        const segChapter = (segmentMatch[1] || normalizedChapter).trim();
+        // 分号或带冒号的格式 → 可能换章
+        if (segmentMatch[1]) {
+          currentChapter = segmentMatch[1].trim();
+        }
+        const segChapter = (segmentMatch[1] || currentChapter).trim();
         const segVersePart = segmentMatch[2] ? segmentMatch[2].replace(/[ \t\u3000]+/g, '') : '';
         const normalizedRef = segVersePart
           ? `${normalizedBook}${segChapter}:${segVersePart}`.replace(/：/g, ':')
@@ -97,8 +137,11 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
       });
 
       const linkedText = linkedParts.join('');
-      return hasBrackets && bracketMatch ? `${bracketMatch[1]}${linkedText}${bracketMatch[3]}` : linkedText;
+      const result = hasBrackets && bracketMatch ? `${bracketMatch[1]}${linkedText}${bracketMatch[3]}` : linkedText;
+      return bookPrefix + result;
     });
+    // 经文处理完毕后再做双空格规范化
+    return bibleProcessed.replace(/([^\s])([ \t\u3000]{2,})([^\s])/g, '$1  \n$3');
   }, [content]);
   return (
     <div 

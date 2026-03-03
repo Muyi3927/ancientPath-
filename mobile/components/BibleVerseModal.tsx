@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Modal, View, Text, FlatList, TouchableOpacity, ActivityIndicator, useColorScheme, Pressable, Alert, TextInput } from 'react-native';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { getVerses, BibleVerse, BibleVersionKey, setActiveBibleVersion, getActiveBibleVersion } from '../services/BibleDatabase';
+import { getVerses, BibleVerse, BibleVersionKey, setActiveBibleVersion, getActiveBibleVersion, parseVerseLection } from '../services/BibleDatabase';
 import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -83,8 +83,9 @@ const BOOK_NAME_MAP: Record<string, number> = {
   '哈': 35, '哈巴谷书': 35,
   '番': 36, '西番雅书': 36,
   '该': 37, '哈该书': 37,
-  '玛': 38, '玛拉基书': 38,
-  '撒迦': 39, '撒迦利亚书': 39,
+  '亚': 38, '撒迦': 38, '撒迦利亚书': 38,
+  '玛': 39, '玛拉基书': 39,
+  
 };
 
 // ID到书卷名的映射（用于显示）
@@ -96,7 +97,7 @@ const BOOK_ID_TO_NAME: Record<number, string> = {
   21: '传道书', 22: '雅歌', 23: '以赛亚书', 24: '耶利米书', 25: '耶利米哀歌',
   26: '以西结书', 27: '但以理书', 28: '何西阿书', 29: '约珥书', 30: '阿摩司书',
   31: '俄巴底亚书', 32: '约拿书', 33: '弥迦书', 34: '那鸿书', 35: '哈巴谷书',
-  36: '西番雅书', 37: '哈该书', 38: '玛拉基书', 39: '撒迦利亚书', 40: '马太福音',
+  36: '西番雅书', 37: '哈该书', 38: '撒迦利亚书', 39: '玛拉基书', 40: '马太福音',
   41: '马可福音', 42: '路加福音', 43: '约翰福音', 44: '使徒行传', 45: '罗马书',
   46: '哥林多前书', 47: '哥林多后书', 48: '加拉太书', 49: '以弗所书', 50: '腓立比书',
   51: '歌罗西书', 52: '帖撒罗尼迦前书', 53: '帖撒罗尼迦后书', 54: '提摩太前书',
@@ -138,6 +139,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
   const availableVersions = useMemo(() => {
     const versions = [
       { key: 'cuv' as BibleVersionKey, label: '和合本' },
+      { key: 'bilingual' as BibleVersionKey, label: '中英对照' },
       { key: 'asv' as BibleVersionKey, label: '美标本' },
     ];
     if (ncvUnlocked) {
@@ -246,8 +248,14 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
   const handleCopy = useCallback(async () => {
     const text = verses
       .filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse)
-      .map(v => `【${bookName} ${chapter}:${v.VerseSN}】${v.Lection}`)
-      .join('\n');
+      .map(v => {
+        const parsed = parseVerseLection(v.Lection);
+        if (parsed.hasBilingual) {
+          return `【${bookName} ${chapter}:${v.VerseSN}】\n${parsed.chinese}\n${parsed.english}`;
+        }
+        return `【${bookName} ${chapter}:${v.VerseSN}】${parsed.chinese}`;
+      })
+      .join('\n\n');
     
     await Clipboard.setStringAsync(text);
     setCopied(true);
@@ -270,14 +278,33 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
       }}>
         {verse.VerseSN}
       </Text>
-      <Text style={{ 
-        color: isDark ? '#d1d5db' : '#374151',
-        lineHeight: 28,
-        fontSize: 18,
-        flex: 1
-      }}>
-        {verse.Lection}
-      </Text>
+      <View style={{ flex: 1 }}>
+        {(() => {
+          const parsed = parseVerseLection(verse.Lection);
+          return (
+            <>
+              <Text style={{ 
+                color: isDark ? '#d1d5db' : '#374151',
+                lineHeight: 28,
+                fontSize: 18,
+                marginBottom: parsed.hasBilingual ? 6 : 0,
+              }}>
+                {parsed.chinese}
+              </Text>
+              {parsed.hasBilingual && (
+                <Text style={{ 
+                  color: isDark ? '#9ca3af' : '#6b7280',
+                  lineHeight: 26,
+                  fontSize: 16,
+                  fontStyle: 'italic',
+                }}>
+                  {parsed.english}
+                </Text>
+              )}
+            </>
+          );
+        })()}
+      </View>
     </View>
   ), [isDark]);
 

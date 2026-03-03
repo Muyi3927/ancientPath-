@@ -27,6 +27,7 @@ import {
   BibleVerse,
   setActiveBibleVersion,
   BibleVersionKey,
+  parseVerseLection,
 } from '../../services/BibleDatabase';
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import * as Clipboard from 'expo-clipboard';
@@ -182,6 +183,13 @@ export default function BibleScreen() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
 
+  // 启动时读取新译本解锁状态
+  useEffect(() => {
+    AsyncStorage.getItem('ncv_unlocked').then(value => {
+      if (value === 'true') setNcvUnlocked(true);
+    });
+  }, []);
+
   // Search State
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -222,14 +230,16 @@ export default function BibleScreen() {
 
   const translationOptions: Record<BibleVersionKey, { label: string; description: string }> = {
     cuv: { label: '和合本', description: 'Chinese Union Version' },
+    bilingual: { label: '中英对照', description: 'Chinese-English Bilingual' },
     asv: { label: 'ASV', description: 'American Standard Version' },
     ncv: { label: '新译本', description: 'New Chinese Version（内测）' },
   };
-  const translationOrder: BibleVersionKey[] = ncvUnlocked ? ['cuv', 'asv', 'ncv'] : ['cuv', 'asv'];
+  const translationOrder: BibleVersionKey[] = ncvUnlocked ? ['cuv', 'bilingual', 'asv', 'ncv'] : ['cuv', 'bilingual', 'asv'];
 
   const handlePasswordSubmit = () => {
     if (passwordInput === '3927') {
       setNcvUnlocked(true);
+      AsyncStorage.setItem('ncv_unlocked', 'true');
       setShowPasswordModal(false);
       setPasswordInput('');
       Alert.alert('解锁成功', '新译本已启用');
@@ -526,8 +536,14 @@ export default function BibleScreen() {
       
       // Format: 【BookAbbr Chapter:Verse】Text per line (matching web version)
       const formatted = selectedVerseObjects
-        .map(v => `【${bookLabel} ${currentChapter}:${v.VerseSN}】${v.Lection.trim()}`)
-        .join('\n');
+        .map(v => {
+          const parsed = parseVerseLection(v.Lection.trim());
+          if (parsed.hasBilingual) {
+            return `【${bookLabel} ${currentChapter}:${v.VerseSN}】\n${parsed.chinese}\n${parsed.english}`;
+          }
+          return `【${bookLabel} ${currentChapter}:${v.VerseSN}】${parsed.chinese}`;
+        })
+        .join('\n\n');
 
       await Clipboard.setStringAsync(formatted);
       Alert.alert('已复制', `已复制 ${sortedSNs.length} 节经文`);
@@ -669,26 +685,50 @@ export default function BibleScreen() {
         >
           {item.VerseSN}
         </Text>
-        <Text
-          className={`flex-1 font-serif ${
-            isSearchHighlighted 
-              ? 'text-gray-900 dark:text-gray-100' 
-              : 'text-gray-800 dark:text-gray-200'
-          }`}
-          style={{
-            fontSize: baseFontSize,
-            lineHeight: verseLineHeight,
-            paddingVertical: 4,
-            paddingRight: 6,
-            paddingLeft: 4,
-            fontWeight: isSearchHighlighted ? '600' : 'normal',
-            textDecorationLine: isSelected ? 'underline' : 'none',
-            textDecorationStyle: 'dashed',
-            textDecorationColor: isDark ? '#60a5fa' : '#93c5fd',
-          }}
-        >
-          {item.Lection}
-        </Text>
+        <View className="flex-1">
+          {(() => {
+            const parsed = parseVerseLection(item.Lection);
+            return (
+              <>
+                <Text
+                  className={`font-serif ${
+                    isSearchHighlighted 
+                      ? 'text-gray-900 dark:text-gray-100' 
+                      : 'text-gray-800 dark:text-gray-200'
+                  }`}
+                  style={{
+                    fontSize: baseFontSize,
+                    lineHeight: verseLineHeight,
+                    paddingVertical: 4,
+                    paddingRight: 6,
+                    paddingLeft: 4,
+                    fontWeight: isSearchHighlighted ? '600' : 'normal',
+                    textDecorationLine: isSelected ? 'underline' : 'none',
+                    textDecorationStyle: 'dashed',
+                    textDecorationColor: isDark ? '#60a5fa' : '#93c5fd',
+                  }}
+                >
+                  {parsed.chinese}
+                </Text>
+                {parsed.hasBilingual && (
+                  <Text
+                    className="font-serif text-gray-600 dark:text-gray-400"
+                    style={{
+                      fontSize: baseFontSize - 2,
+                      lineHeight: verseLineHeight - 2,
+                      paddingVertical: 2,
+                      paddingRight: 6,
+                      paddingLeft: 4,
+                      fontStyle: 'italic',
+                    }}
+                  >
+                    {parsed.english}
+                  </Text>
+                )}
+              </>
+            );
+          })()}
+        </View>
       </TouchableOpacity>
     );
   };
@@ -777,9 +817,21 @@ export default function BibleScreen() {
                     {book?.FullName} {item.ChapterSN}:{item.VerseSN}
                 </Text>
             </View>
-            <Text className="text-base text-gray-800 dark:text-gray-200 leading-6" numberOfLines={2}>
-                {item.Lection}
-            </Text>
+            {(() => {
+              const parsed = parseVerseLection(item.Lection);
+              return (
+                <>
+                  <Text className="text-base text-gray-800 dark:text-gray-200 leading-6" numberOfLines={2}>
+                    {parsed.chinese}
+                  </Text>
+                  {parsed.hasBilingual && (
+                    <Text className="text-sm text-gray-600 dark:text-gray-400 leading-5 italic" numberOfLines={2}>
+                      {parsed.english}
+                    </Text>
+                  )}
+                </>
+              );
+            })()}
         </TouchableOpacity>
     );
   };

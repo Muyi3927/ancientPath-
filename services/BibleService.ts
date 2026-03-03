@@ -1,4 +1,4 @@
-export type BibleVersion = 'cuv' | 'asv' | 'ncv';
+export type BibleVersion = 'cuv' | 'bilingual' | 'asv' | 'ncv';
 
 export interface BibleBook {
   SN: number;
@@ -14,6 +14,12 @@ export interface BibleVerse {
   ChapterSN: number;
   VerseSN: number;
   Lection: string;
+}
+
+export interface ParsedVerse {
+  chinese: string;
+  english: string;
+  hasBilingual: boolean;
 }
 
 // 自动切换 API 基础地址 (本地开发 vs 生产环境)
@@ -53,4 +59,21 @@ export const searchVerses = async (query: string, version: BibleVersion = 'cuv')
     console.error('Bible search failed:', e);
     return [];
   }
+};
+
+export const parseVerseLection = (lection: string): ParsedVerse => {
+  const separator = ' | ';
+  if (lection.includes(separator)) {
+    const parts = lection.split(separator);
+    return {
+      chinese: parts[0].trim(),
+      english: parts[1].trim(),
+      hasBilingual: true
+    };
+  }
+  return {
+    chinese: lection,
+    english: '',
+    hasBilingual: false
+  };
 };

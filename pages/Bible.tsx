@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useContext } from 'react';
-import { getBooks, getVerses, BibleBook, BibleVerse, searchVerses, BibleVersion } from '../services/BibleService';
+import { getBooks, getVerses, BibleBook, BibleVerse, searchVerses, BibleVersion, parseVerseLection } from '../services/BibleService';
 import { Search, ChevronLeft, ChevronRight, Menu, X, Copy, Square, CheckSquare, Check } from 'lucide-react';
 import { LayoutContext } from '../App';
 import { AuthContext } from '../App';
@@ -118,7 +118,14 @@ export const Bible: React.FC = () => {
     const text = verses
       .filter(v => selectedVerseIds.has(v.ID))
       .sort((a, b) => a.VerseSN - b.VerseSN)
-      .map(v => `【${shortName} ${currentChapter}:${v.VerseSN}】${v.Lection}`)
+      .map(v => {
+        const parsed = parseVerseLection(v.Lection);
+        const verseHeader = `【${shortName} ${currentChapter}:${v.VerseSN}】`;
+        if (parsed.hasBilingual) {
+          return `${verseHeader}\n${parsed.chinese}\n${parsed.english}`;
+        }
+        return `${verseHeader}${parsed.chinese}`;
+      })
       .join('\n');
     await navigator.clipboard.writeText(text);
     setCopySuccess(true);
@@ -416,7 +423,7 @@ export const Bible: React.FC = () => {
                           className="w-full text-left px-3 py-2 rounded-md hover:bg-gray-200 dark:hover:bg-gray-700 text-sm"
                       >
                           <span className="font-bold text-blue-600">{book?.ShortName} {verse.ChapterSN}:{verse.VerseSN}</span>
-                          <p className="text-gray-600 dark:text-gray-300 truncate">{verse.Lection}</p>
+                          <p className="text-gray-600 dark:text-gray-300 truncate">{parseVerseLection(verse.Lection).chinese}</p>
                       </button>
                   )
                })}
@@ -547,6 +554,7 @@ export const Bible: React.FC = () => {
                 className="bg-gray-100 dark:bg-gray-800 border-none rounded-md py-1 px-2 text-[10px] md:text-sm focus:ring-2 focus:ring-blue-500 dark:text-white mr-1 md:mr-2"
             >
                 <option value="cuv">和合本</option>
+                <option value="bilingual">中英对照</option>
                 <option value="asv">ASV</option>
                 {isAdmin && <option value="ncv">新译本</option>}
             </select>
@@ -659,16 +667,35 @@ export const Bible: React.FC = () => {
                       </div>
                     )}
                     <span className="text-xs text-gray-400 w-6 md:w-8 pt-2 select-none flex-shrink-0">{verse.VerseSN}</span>
-                    <p 
-                      className={`leading-relaxed font-serif flex-1 transition-all duration-200 ${
-                        (isCopyMode && isSelected) || isHighlighted
-                          ? 'text-gray-900 dark:text-gray-100 font-medium' 
-                          : 'text-gray-800 dark:text-gray-200'
-                      }`}
-                      style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}
-                    >
-                      {verse.Lection}
-                    </p>
+                    <div className={`leading-relaxed font-serif flex-1 transition-all duration-200 ${
+                      (isCopyMode && isSelected) || isHighlighted
+                        ? 'text-gray-900 dark:text-gray-100 font-medium' 
+                        : 'text-gray-800 dark:text-gray-200'
+                    }`}>
+                      {(() => {
+                        const parsed = parseVerseLection(verse.Lection);
+                        return parsed.hasBilingual ? (
+                          <>
+                            <p style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}>
+                              {parsed.chinese}
+                            </p>
+                            <p style={{ 
+                              fontSize: `${fontSizeScale}rem`, 
+                              lineHeight: '1.6',
+                              fontStyle: 'italic',
+                              color: 'rgb(107, 114, 128)',
+                              marginTop: '0.25rem'
+                            }} className="dark:text-gray-400">
+                              {parsed.english}
+                            </p>
+                          </>
+                        ) : (
+                          <p style={{ fontSize: `${fontSizeScale}rem`, lineHeight: '1.6' }}>
+                            {parsed.chinese}
+                          </p>
+                        );
+                      })()}
+                    </div>
                   </div>
                 );
               })}
@@ -1019,7 +1046,7 @@ export const Bible: React.FC = () => {
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="font-bold text-blue-600 dark:text-blue-400">{book?.ShortName} {verse.ChapterSN}:{verse.VerseSN}</span>
                                     </div>
-                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm line-clamp-2">{verse.Lection}</p>
+                                    <p className="text-gray-700 dark:text-gray-300 leading-relaxed text-sm line-clamp-2">{parseVerseLection(verse.Lection).chinese}</p>
                                 </button>
                             )
                         })}

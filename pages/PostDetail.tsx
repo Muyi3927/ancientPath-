@@ -26,7 +26,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // Bible Verse Modal State
   const [showBibleModal, setShowBibleModal] = useState(false);
   const [selectedBibleReference, setSelectedBibleReference] = useState('');
-  const [bibleVersion, setBibleVersion] = useState<'cuv' | 'asv' | 'ncv'>('cuv');
+  const [bibleVersion, setBibleVersion] = useState<'cuv' | 'bilingual' | 'asv' | 'ncv'>('cuv');
   
   // Accessibility: Font Size State
   // Default to 1.2 for better readability
