@@ -4,7 +4,7 @@ import { webCache, CacheConfigs } from './cache';
 
 // Automatically switch to local backend in development
 const API_BASE_URL = import.meta.env.DEV 
-  ? 'http://localhost:8787' 
+  ? `http://${window.location.hostname}:8787`
   : 'https://api.ancientpath.dpdns.org';
 
 export const loginUser = async (password: string): Promise<{ success: boolean; token?: string; error?: string }> => {

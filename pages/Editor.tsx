@@ -2,7 +2,7 @@ import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
-import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus, AlignLeft, AlignCenter, AlignRight, Home } from 'lucide-react';
+import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus, AlignLeft, AlignCenter, AlignRight, Home, FileText } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
 import { generateSummary } from '../services/aiService';
@@ -53,6 +53,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+    const [uploadingPdf, setUploadingPdf] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   
   const [showColorPicker, setShowColorPicker] = useState(false);
@@ -76,6 +77,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
   const contentImageInputRef = useRef<HTMLInputElement>(null);
+    const contentPdfInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const suggestedTags = useMemo(() => {
@@ -181,6 +183,42 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
         e.target.value = '';
     }
   };
+
+    const escapeHtmlAttribute = (value: string) => {
+        return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+
+    const insertPdfBlock = (pdfUrl: string) => {
+        const safeUrl = escapeHtmlAttribute(pdfUrl.trim());
+        if (!safeUrl) return;
+
+        insertMarkdown(
+            `\n<div class=\"pdf-embed\">\n<embed src=\"${safeUrl}\" type=\"application/pdf\">\n</div>\n`
+        );
+    };
+
+    const handleContentPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingPdf(true);
+        try {
+            const publicUrl = await uploadFile(file);
+            insertPdfBlock(publicUrl);
+        } catch (err) {
+            console.error(err);
+            alert('PDF 上传失败');
+        } finally {
+            setUploadingPdf(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleInsertPdfByUrl = () => {
+        const url = window.prompt('请输入 PDF 链接 (https://...)');
+        if (!url) return;
+        insertPdfBlock(url);
+    };
 
   // Tag Management Functions
   const handleRenameTag = async (oldTag: string) => {
@@ -814,6 +852,28 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                         className="hidden" 
                         accept="image/*" 
                         onChange={handleContentImageUpload} 
+                    />
+                    <button
+                        onClick={handleInsertPdfByUrl}
+                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                        title="插入 PDF 链接"
+                    >
+                        <FileText className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => contentPdfInputRef.current?.click()}
+                        disabled={uploadingPdf}
+                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 disabled:opacity-50"
+                        title="上传并插入 PDF"
+                    >
+                        {uploadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    </button>
+                    <input
+                        type="file"
+                        ref={contentPdfInputRef}
+                        className="hidden"
+                        accept="application/pdf,.pdf"
+                        onChange={handleContentPdfUpload}
                     />
                 </div>
                 

@@ -15,6 +15,7 @@ import { manipulateAsync, SaveFormat } from 'expo-image-manipulator';
 import { isFavorite, toggleFavorite, getFavorites } from '../../services/favoriteService';
 import { getHighlights, addHighlight, removeHighlight, type Highlight } from '../../services/highlightService';
 import * as Clipboard from 'expo-clipboard';
+import * as WebBrowser from 'expo-web-browser';
 import BibleVerseModal from '../../components/BibleVerseModal';
 import { BibleVersionKey } from '../../services/BibleDatabase';
 
@@ -272,7 +273,60 @@ export default function PostDetailScreen() {
             );
         }
         
-        // 普通链接
+        // PDF 链接 - 在应用内打开
+        if (href && href.match(/\.pdf(\?.*)?$/i)) {
+            return (
+                <Pressable
+                    onPress={() => WebBrowser.openBrowserAsync(href, {
+                        presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+                        toolbarColor: isDark ? '#1e293b' : '#2563eb',
+                        controlsColor: '#fff',
+                        showTitle: true,
+                    })}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        backgroundColor: isDark ? '#3b1c1c' : '#fff1f2',
+                        borderWidth: 1,
+                        borderColor: '#dc2626',
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 8,
+                        marginVertical: 6,
+                        gap: 8,
+                    }}
+                >
+                    <Text style={{ fontSize: 28, lineHeight: 32 }}>📄</Text>
+                    <View style={{ flex: 1 }}>
+                        <Text style={{ color: '#dc2626', fontWeight: '600', fontSize: 15 }}>
+                            {linkText}
+                        </Text>
+                        <Text style={{ color: isDark ? '#fca5a5' : '#9b1c1c', fontSize: 12, marginTop: 2 }}>
+                            点击在应用内查看 PDF
+                        </Text>
+                    </View>
+                    <Text style={{ fontSize: 18, color: '#dc2626' }}>›</Text>
+                </Pressable>
+            );
+        }
+
+        // 普通外部链接 - 在应用内浏览器打开
+        if (href && (href.startsWith('http://') || href.startsWith('https://'))) {
+            return (
+                <Text
+                    onPress={() => WebBrowser.openBrowserAsync(href, {
+                        toolbarColor: isDark ? '#1e293b' : '#2563eb',
+                        controlsColor: '#fff',
+                        showTitle: true,
+                    })}
+                    style={{ color: '#2563eb', textDecorationLine: 'underline' }}
+                >
+                    {linkText}
+                </Text>
+            );
+        }
+
+        // 其他链接（锚点等）
         return <Text style={{ color: '#2563eb', textDecorationLine: 'underline' }}>{linkText}</Text>;
     };
 

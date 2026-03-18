@@ -85,6 +85,10 @@ app.get('/api/media/:folder/:filename', async (c) => {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
+    // 确保浏览器内联显示而非下载
+    if (!headers.has('content-disposition')) {
+      headers.set('content-disposition', 'inline');
+    }
 
     return new Response(object.body, {
       headers,
@@ -243,19 +247,27 @@ app.put('/api/upload', async (c) => {
       folder = 'audios/';
     }
 
-    // 生成文件名（时间戳 + 原文件名）
-    const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    // 生成文件名：日期 (YYMMDD) + 原文件名（保留中文）
+    const now = new Date();
+    const year = String(now.getFullYear()).slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+    const safeName = `${dateStr}-${file.name}`;
     const key = `${folder}${safeName}`;  // 关键：这里拼接文件夹
 
-    // 上传到 R2（key 包含文件夹）
+    // 上传到 R2（key 包含文件夹，可含中文）
     await c.env.BUCKET.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type }
+      httpMetadata: {
+        contentType: file.type,
+        contentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      }
     });
 
-    // 使用 Worker 代理作为公开 URL (解决自定义域名配置困难的问题)
-    // 格式: https://api.ancientpath.dpdns.org/api/media/images/xxx.png
+    // 构造公开 URL 时对文件名部分做 encodeURIComponent，
+    // 这样代理路由拿到参数后 decode 能还原出正确的 R2 key
     const requestUrl = new URL(c.req.url);
-    const publicUrl = `${requestUrl.origin}/api/media/${key}`;
+    const publicUrl = `${requestUrl.origin}/api/media/${folder}${encodeURIComponent(safeName)}`;
 
     return c.json({ url: publicUrl });
   } catch (e: any) {

@@ -266,25 +266,19 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                 <span>导出 PDF</span>
             </button>
 
-          <div className="flex items-center bg-white dark:bg-slate-800 rounded-full p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
-             <div className="px-3 flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider hidden sm:flex">
-                <Type className="w-3 h-3" /> 字体
-             </div>
-             <button 
-                onClick={decreaseFont} 
-                className="p-2 w-10 h-10 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full active:bg-slate-200 transition-colors"
+          <div className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
+             <Type className="w-4 h-4 text-slate-400 mr-1" />
+             <button
+                onClick={decreaseFont}
+                className="px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-sm font-bold"
                 title="减小字体"
-             >
-                <span className="font-bold text-sm">A-</span>
-             </button>
-             <span className="text-xs font-mono w-12 text-center">{(fontSizeScale * 100).toFixed(0)}%</span>
-             <button 
-                onClick={increaseFont} 
-                className="p-2 w-10 h-10 flex items-center justify-center hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full active:bg-slate-200 transition-colors"
+             >A-</button>
+             <span className="text-xs font-mono w-10 text-center">{(fontSizeScale * 100).toFixed(0)}%</span>
+             <button
+                onClick={increaseFont}
+                className="px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-sm font-bold"
                 title="增大字体"
-             >
-                <span className="font-bold text-lg">A+</span>
-             </button>
+             >A+</button>
           </div>
           </div>
       </div>

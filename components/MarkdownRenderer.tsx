@@ -4,6 +4,48 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import rehypeSlug from 'rehype-slug';
 
+// PDF 嵌入组件：桌面端内嵌，移动端显示按钮卡片
+const PdfEmbed: React.FC<{ src: string }> = ({ src }) => {
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android|Mobile/i.test(navigator.userAgent);
+
+  if (isMobile) {
+    return (
+      <div className="not-prose my-4 flex gap-3">
+        <a
+          href={src}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-full text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors no-underline"
+        >
+          在浏览器中打开
+        </a>
+        <a
+          href={src}
+          download
+          className="px-4 py-2 bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-100 rounded-full text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors no-underline"
+        >
+          下载 PDF
+        </a>
+      </div>
+    );
+  }
+
+  return (
+    <div className="my-6 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-900/50 print:hidden">
+      <embed
+        src={src}
+        type="application/pdf"
+        className="w-full min-h-[680px] border-0"
+      />
+      <div className="flex items-center gap-3 px-4 py-2 border-t border-slate-200 dark:border-slate-700 text-sm text-slate-500">
+        <span>无法显示？</span>
+        <a href={src} target="_blank" rel="noopener noreferrer" className="text-primary-600 underline font-medium">直接打开</a>
+        <a href={src} download className="text-slate-500 underline">下载</a>
+      </div>
+    </div>
+  );
+};
+
 interface MarkdownRendererProps {
   content: string;
   className?: string;
@@ -41,6 +83,10 @@ const VALID_BOOK_NAMES = new Set([
 const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?(?:[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,;；][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
 
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '', style, onImageClick, onBibleVerseClick }) => {
+  const isSafeMediaUrl = (url: string) => /^(https?:\/\/|\/)/i.test(url);
+
+  const isPdfUrl = (url: string) => /\.pdf(?:$|[?#])/i.test(url);
+
   // 预处理内容：将经文引用替换为 markdown 链接
   const processedContent = useCallback(() => {
     // 先处理经文引用（避免双空格规范化将经文引用内的空格替换为换行）
@@ -222,7 +268,61 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                 <table {...props} className="print:break-inside-avoid print:page-break-inside-avoid">
                     {children}
                 </table>
-            )
+            ),
+            iframe: ({node, ...props}) => {
+                const src = typeof props.src === 'string' ? props.src : '';
+                if (!src || !isSafeMediaUrl(src)) {
+                  return null;
+                }
+
+                if (isPdfUrl(src)) {
+                  return <PdfEmbed src={src} />;
+                }
+
+                return (
+                  <div className="my-6 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-900/50">
+                    <iframe
+                      {...props}
+                      src={src}
+                      loading={props.loading || 'lazy'}
+                      className="min-h-[360px] w-full border-0 print:hidden"
+                    />
+                    <div className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">
+                      <a href={src} target="_blank" rel="noopener noreferrer" className="underline">打开内容</a>
+                    </div>
+                  </div>
+                );
+            },
+            embed: ({node, ...props}) => {
+                const src = typeof props.src === 'string' ? props.src : '';
+                if (!src || !isSafeMediaUrl(src)) return null;
+                if (isPdfUrl(src) || (typeof props.type === 'string' && props.type.includes('pdf'))) {
+                  return <PdfEmbed src={src} />;
+                }
+                return null;
+            },
+            object: ({node, ...props}) => {
+                const data = typeof props.data === 'string' ? props.data : '';
+                if (!data || !isSafeMediaUrl(data)) {
+                  return null;
+                }
+
+                const pdfLike = isPdfUrl(data);
+                return (
+                  <div className="my-6 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden bg-slate-50 dark:bg-slate-900/50">
+                    <object
+                      {...props}
+                      data={data}
+                      className={`${pdfLike ? 'min-h-[520px]' : 'min-h-[360px]'} w-full print:hidden`}
+                    />
+                    <div className="px-4 py-2 text-sm text-slate-600 dark:text-slate-300">
+                      <a href={data} target="_blank" rel="noopener noreferrer" className="underline">
+                        打开{pdfLike ? 'PDF' : '内容'}
+                      </a>
+                    </div>
+                  </div>
+                );
+            }
         }}
       >
         {processedContent()}
