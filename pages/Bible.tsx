@@ -237,7 +237,6 @@ export const Bible: React.FC = () => {
   
   const handleDesktopVerseSelect = (verseNum: number) => {
       setShowDesktopVerseModal(false);
-      setMenuVisible(false); // 收起菜单栏
       
       setTimeout(() => {
           const verse = verses.find(v => v.VerseSN === verseNum);
@@ -251,9 +250,10 @@ export const Bible: React.FC = () => {
                   const containerTop = versesContainerRef.current.getBoundingClientRect().top;
                   const elementTop = targetElement.getBoundingClientRect().top;
                   const offset = elementTop - containerTop + versesContainerRef.current.scrollTop;
+                    const jumpOffset = isMenuVisible ? 140 : 24;
                   
                   versesContainerRef.current.scrollTo({
-                      top: offset,
+                      top: Math.max(0, offset - jumpOffset),
                       behavior: 'smooth'
                   });
                   
@@ -266,7 +266,6 @@ export const Bible: React.FC = () => {
   const handleVerseSelect = (verseNum: number) => {
       setShowBookModal(false);
       setModalView('books'); // Reset for next time
-      setMenuVisible(false); // 收起菜单栏
       
       // 等待verses更新和DOM渲染后再滚动
       setTimeout(() => {
@@ -283,9 +282,10 @@ export const Bible: React.FC = () => {
                   const containerTop = versesContainerRef.current.getBoundingClientRect().top;
                   const elementTop = targetElement.getBoundingClientRect().top;
                   const offset = elementTop - containerTop + versesContainerRef.current.scrollTop;
+                    const jumpOffset = isMenuVisible ? 100 : 20;
                   
                   versesContainerRef.current.scrollTo({
-                      top: offset,
+                      top: Math.max(0, offset - jumpOffset),
                       behavior: 'smooth'
                   });
                   

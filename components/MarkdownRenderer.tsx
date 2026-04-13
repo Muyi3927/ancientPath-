@@ -82,6 +82,10 @@ const VALID_BOOK_NAMES = new Set([
 // 注意：只匹配水平空白（空格、制表符），避免跨越换行
 const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?(?:[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,;；][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
 
+// 避免 HTML 块标签和后续文本粘连，导致 markdown 链接被当作普通文本
+const DIV_CLOSE_WITHOUT_NEWLINE_REGEX = /(<\/div\s*>)([^\s<])/gi;
+const DIV_CLOSE_SINGLE_NEWLINE_REGEX = /(<\/div\s*>)[ \t]*\n(?![ \t]*\n)/gi;
+
 const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className = '', style, onImageClick, onBibleVerseClick }) => {
   const isSafeMediaUrl = (url: string) => /^(https?:\/\/|\/)/i.test(url);
 
@@ -89,8 +93,12 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
 
   // 预处理内容：将经文引用替换为 markdown 链接
   const processedContent = useCallback(() => {
+    // 先修复 </div> 后的正文衔接：无换行或仅单换行都补成空行，确保退出 HTML block
+    const normalizedContent = content
+      .replace(DIV_CLOSE_WITHOUT_NEWLINE_REGEX, '$1\n\n$2')
+      .replace(DIV_CLOSE_SINGLE_NEWLINE_REGEX, '$1\n\n');
     // 先处理经文引用（避免双空格规范化将经文引用内的空格替换为换行）
-    const bibleProcessed = content.replace(BIBLE_REFERENCE_REGEX, (match, book, chapter, versePart) => {
+    const bibleProcessed = normalizedContent.replace(BIBLE_REFERENCE_REGEX, (match, book, chapter, versePart) => {
       let normalizedBook = String(book || '').trim();
       const normalizedChapter = String(chapter || '').trim();
       

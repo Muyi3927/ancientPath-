@@ -35,6 +35,17 @@ export default defineConfig({
     'process.env': process.env
   },
   server: {
+    watch: {
+      ignored: [
+        '**/backups/**',
+        '**/CosyVoice/**',
+        '**/mobile/**',
+        '**/outputs/**',
+        '**/lumina-blog-media/**',
+        '**/lumina-blog-media-optimized/**',
+        '**/dev-dist/**'
+      ]
+    },
     proxy: {
       '/api': {
         target: 'http://localhost:8787',
