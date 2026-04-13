@@ -5,6 +5,7 @@ import { Asset } from 'expo-asset';
 type VersionConfig = {
   dbName: string;
   asset?: number;
+  assetVersion?: number;
   useApi?: boolean;
   booksQuery: string;
   versesQuery: string;
@@ -20,6 +21,7 @@ const VERSION_CONFIG = {
   cuv: {
     dbName: 'bible_cuv.db',
     asset: require('../assets/bible_cuv.db'),
+    assetVersion: 1,
     booksQuery:
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
@@ -33,6 +35,7 @@ const VERSION_CONFIG = {
   asv: {
     dbName: 'ASV.db',
     asset: require('../assets/ASV.db'),
+    assetVersion: 1,
     booksQuery:
       'SELECT b.id AS SN, b.name AS FullName, b.name AS ShortName, CASE WHEN b.id <= 39 THEN 0 ELSE 1 END AS NewOrOld, MAX(v.chapter) AS ChapterNumber FROM ASV_books b JOIN ASV_verses v ON v.book_id = b.id GROUP BY b.id ORDER BY b.id ASC',
     versesQuery:
@@ -46,6 +49,7 @@ const VERSION_CONFIG = {
   ncv: {
     dbName: 'bible_ncv.db',
     asset: require('../assets/bible_ncv.db'),
+    assetVersion: 2,
     booksQuery:
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
@@ -59,6 +63,7 @@ const VERSION_CONFIG = {
   bilingual: {
     dbName: 'bible_bilingual.db',
     asset: require('../assets/bible_bilingual.db'),
+    assetVersion: 1,
     booksQuery:
       'SELECT SN, FullName, ShortName, NewOrOld, ChapterNumber FROM BibleID ORDER BY SN ASC',
     versesQuery:
@@ -118,6 +123,32 @@ export const parseVerseLection = (lection: string): ParsedVerse => {
 // 每个版本维护独立的数据库实例，避免频繁开关
 const dbInstances: Partial<Record<string, SQLite.SQLiteDatabase>> = {};
 
+const DB_ASSET_VERSION_META = 'db_asset_versions.json';
+
+const readDbAssetVersions = async (dbDir: string): Promise<Record<string, number>> => {
+  const metaPath = `${dbDir}/${DB_ASSET_VERSION_META}`;
+  const metaInfo = await FileSystem.getInfoAsync(metaPath);
+  if (!metaInfo.exists) return {};
+
+  try {
+    const raw = await FileSystem.readAsStringAsync(metaPath);
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object') return {};
+    const result: Record<string, number> = {};
+    for (const [k, v] of Object.entries(parsed)) {
+      if (typeof v === 'number') result[k] = v;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+};
+
+const writeDbAssetVersions = async (dbDir: string, versions: Record<string, number>) => {
+  const metaPath = `${dbDir}/${DB_ASSET_VERSION_META}`;
+  await FileSystem.writeAsStringAsync(metaPath, JSON.stringify(versions));
+};
+
 const ensureDatabaseCopied = async (version: BibleVersionKey): Promise<string> => {
   const config = VERSION_CONFIG[version];
   if (!config.asset) {
@@ -126,18 +157,25 @@ const ensureDatabaseCopied = async (version: BibleVersionKey): Promise<string> =
 
   const dbDir = FileSystem.documentDirectory + 'SQLite';
   const dbPath = dbDir + '/' + config.dbName;
+  const targetAssetVersion = config.assetVersion ?? 1;
 
-  const fileInfo = await FileSystem.getInfoAsync(dbPath);
-  if (fileInfo.exists) {
-    return dbPath;
-  }
-
-  // 数据库文件不存在，需要从 asset 复制
-  console.log(`Database ${config.dbName} does not exist, copying from assets...`);
   const dirInfo = await FileSystem.getInfoAsync(dbDir);
   if (!dirInfo.exists) {
     await FileSystem.makeDirectoryAsync(dbDir, { intermediates: true });
   }
+
+  const versions = await readDbAssetVersions(dbDir);
+
+  const fileInfo = await FileSystem.getInfoAsync(dbPath);
+  const existingVersion = versions[config.dbName] ?? 0;
+  if (fileInfo.exists && existingVersion >= targetAssetVersion) {
+    return dbPath;
+  }
+
+  // 数据库文件不存在，需要从 asset 复制
+  console.log(
+    `Refreshing database ${config.dbName} from assets (local v${existingVersion} -> asset v${targetAssetVersion})...`
+  );
 
   const dbAsset = Asset.fromModule(config.asset);
   // 如果 asset 已有本地 URI（原生构建内嵌），不需要网络下载
@@ -149,10 +187,17 @@ const ensureDatabaseCopied = async (version: BibleVersionKey): Promise<string> =
     throw new Error(`Failed to get local URI for database asset: ${config.dbName}`);
   }
 
+  if (fileInfo.exists) {
+    await FileSystem.deleteAsync(dbPath, { idempotent: true });
+  }
+
   await FileSystem.copyAsync({
     from: dbAsset.localUri,
     to: dbPath,
   });
+
+  versions[config.dbName] = targetAssetVersion;
+  await writeDbAssetVersions(dbDir, versions);
   console.log(`Database ${config.dbName} copied successfully.`);
   return dbPath;
 };
