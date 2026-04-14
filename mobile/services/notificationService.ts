@@ -155,7 +155,7 @@ export async function setNotificationEnabled(enabled: boolean): Promise<void> {
 /**
  * 检查新讲道并发送通知
  */
-export async function checkForNewPosts(): Promise<void> {
+export async function checkForNewPosts(forceRefresh = true): Promise<void> {
   const notifications = getNotifications();
   if (!notifications) return;
 
@@ -166,7 +166,7 @@ export async function checkForNewPosts(): Promise<void> {
     const hasPermission = await checkNotificationPermission();
     if (!hasPermission) return;
 
-    const posts = await getPosts();
+    const posts = await getPosts(undefined, undefined, forceRefresh);
     if (posts.length === 0) return;
 
     const publishedPosts = posts.filter(p => !p.tags.includes('__draft__'));

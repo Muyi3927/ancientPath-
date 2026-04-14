@@ -402,8 +402,8 @@ export default function PostDetailScreen() {
       });
 
       Promise.all([
-          getPostById(postId),
-          getCategories()
+          getPostById(postId, true),
+          getCategories(true)
       ])
         .then(([postData, cats]) => {
           setPost(postData);
@@ -658,8 +658,108 @@ export default function PostDetailScreen() {
     '亚', '撒迦', '撒迦利亚书', '玛', '玛拉基书'
   ]);
 
+  const BIBLE_NUMBER_TOKEN = '[\\d〇零一二三四五六七八九十百两兩]{1,6}';
+  const BIBLE_CHINESE_NUMBER_TOKEN = '[〇零一二三四五六七八九十百两兩]{1,6}';
+  const BIBLE_CHAPTER_TOKEN = `(?:\\d{1,3}|${BIBLE_CHINESE_NUMBER_TOKEN}(?=[ \\t\\u3000]*[章篇]))`;
+  const BIBLE_CROSS_CHAPTER_TOKEN = `${BIBLE_NUMBER_TOKEN}[ \\t\\u3000]*[:：][ \\t\\u3000]*${BIBLE_NUMBER_TOKEN}`;
+  const BIBLE_VERSE_END_TOKEN = `(?:${BIBLE_CROSS_CHAPTER_TOKEN}|${BIBLE_NUMBER_TOKEN})`;
+  const BIBLE_VERSE_TOKEN = `${BIBLE_NUMBER_TOKEN}(?:[ \\t\\u3000]*-[ \\t\\u3000]*${BIBLE_VERSE_END_TOKEN})?`;
+
+  const CHINESE_NUMERAL_RE = /^[〇零一二三四五六七八九十百两兩]+$/;
+  const BARE_VERSE_RANGE_RE = new RegExp(`^${BIBLE_VERSE_TOKEN}$`);
+  const SEGMENT_REFERENCE_REGEX = new RegExp(
+    `^(?:第?[ \\t\\u3000]*(${BIBLE_CHAPTER_TOKEN})[ \\t\\u3000]*[章篇]?[ \\t\\u3000]*(?:中|上|下)?[ \\t\\u3000]*)?(?:[:：][ \\t\\u3000]*|[ \\t\\u3000]+)?(${BIBLE_VERSE_TOKEN})?\\s*[节]?$`
+  );
+
+  const CN_DIGIT_MAP: Record<string, number> = {
+    '〇': 0,
+    '零': 0,
+    '一': 1,
+    '二': 2,
+    '三': 3,
+    '四': 4,
+    '五': 5,
+    '六': 6,
+    '七': 7,
+    '八': 8,
+    '九': 9,
+  };
+
+  const CN_UNIT_MAP: Record<string, number> = {
+    '十': 10,
+    '百': 100,
+  };
+
+  const chineseNumeralToInt = (input: string): number | null => {
+    const s = input.trim().replace(/兩/g, '二').replace(/两/g, '二');
+    if (!s || !CHINESE_NUMERAL_RE.test(s)) return null;
+
+    let total = 0;
+    let number = 0;
+
+    for (const ch of s) {
+      if (ch in CN_DIGIT_MAP) {
+        number = CN_DIGIT_MAP[ch];
+        continue;
+      }
+
+      if (ch in CN_UNIT_MAP) {
+        const unit = CN_UNIT_MAP[ch];
+        if (number === 0) number = 1;
+        total += number * unit;
+        number = 0;
+        continue;
+      }
+
+      return null;
+    }
+
+    const result = total + number;
+    return result > 0 ? result : null;
+  };
+
+  const normalizeBibleNumberToken = (token: string): string | null => {
+    const compact = token.replace(/[ \t\u3000]+/g, '').trim();
+    if (!compact) return null;
+
+    if (/^\d+$/.test(compact)) {
+      return String(parseInt(compact, 10));
+    }
+
+    const cn = chineseNumeralToInt(compact);
+    return cn ? String(cn) : null;
+  };
+
+  const normalizeVersePart = (token: string): string | null => {
+    const compact = token.replace(/[ \t\u3000]+/g, '').trim();
+    if (!compact) return null;
+
+    if (!compact.includes('-')) {
+      return normalizeBibleNumberToken(compact);
+    }
+
+    const [startRaw, endRaw] = compact.split('-', 2);
+    const start = normalizeBibleNumberToken(startRaw || '');
+    if (!start || !endRaw) return null;
+
+    if (endRaw.includes(':') || endRaw.includes('：')) {
+      const [endChapterRaw, endVerseRaw] = endRaw.split(/[:：]/, 2);
+      const endChapter = normalizeBibleNumberToken(endChapterRaw || '');
+      const endVerse = normalizeBibleNumberToken(endVerseRaw || '');
+      if (!endChapter || !endVerse) return null;
+      return `${start}-${endChapter}:${endVerse}`;
+    }
+
+    const end = normalizeBibleNumberToken(endRaw || '');
+    if (!end) return null;
+    return `${start}-${end}`;
+  };
+
   // 识别经文引用的正则表达式（与web端一致）
-  const BIBLE_REFERENCE_REGEX = /[《【（]?([A-Za-z\u4e00-\u9fa5]+)[》】）]?[ \t\u3000]*第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?(?:[ \t\u3000]*第?[ \t\u3000]*(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)[ \t\u3000]*[节]?)?(?:[ \t\u3000]*[，,;；][ \t\u3000]*(?:第?[ \t\u3000]*\d{1,3}[ \t\u3000]*[章]?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)*[ \t\u3000]*[》】）]?/g;
+  const BIBLE_REFERENCE_REGEX = new RegExp(
+    `[《【（]?([A-Za-z\\u4e00-\\u9fa5]+?)(?=[》】）]?[ \\t\\u3000]*第?[ \\t\\u3000]*${BIBLE_CHAPTER_TOKEN}[ \\t\\u3000]*[章篇]?)[》】）]?[ \\t\\u3000]*第?[ \\t\\u3000]*(${BIBLE_CHAPTER_TOKEN})[ \\t\\u3000]*[章篇]?(?:[ \\t\\u3000]*第?[ \\t\\u3000]*(?:[:：][ \\t\\u3000]*|[ \\t\\u3000]+)?(${BIBLE_VERSE_TOKEN})[ \\t\\u3000]*[节]?)?(?:[ \\t\\u3000]*[，,;；][ \\t\\u3000]*(?:第?[ \\t\\u3000]*${BIBLE_CHAPTER_TOKEN}[ \\t\\u3000]*[章篇]?[ \\t\\u3000]*)?(?:[:：][ \\t\\u3000]*|[ \\t\\u3000]+)?${BIBLE_VERSE_TOKEN})*[ \\t\\u3000]*[》】）]?`,
+    'g'
+  );
 
   const processHTMLWithBibleLinks = (html: string) => {
     // 在HTML中查找文本节点并添加经文链接
@@ -667,7 +767,7 @@ export default function PostDetailScreen() {
     return html.replace(/>([^<]+)</g, (match, text) => {
       const processedText = text.replace(BIBLE_REFERENCE_REGEX, (match: string, book: string, chapter: string, versePart: string) => {
         let normalizedBook = String(book || '').trim();
-        const normalizedChapter = String(chapter || '').trim();
+        const normalizedChapter = normalizeBibleNumberToken(String(chapter || ''));
         
         // 验证书卷名是否有效，如果不有效则尝试从左截取找有效后缀
         // 去除书名尾部的“第”字（正则贪婪匹配可能吞入）
@@ -719,7 +819,8 @@ export default function PostDetailScreen() {
             firstSegmentHandled = true;
             currentChapter = normalizedChapter;
             if (versePart) {
-              const cleanedVersePart = String(versePart).replace(/[ \t\u3000]+/g, '');
+              const cleanedVersePart = normalizeVersePart(String(versePart));
+              if (!cleanedVersePart) return match;
               const normalizedRef = `${normalizedBook}${normalizedChapter}:${cleanedVersePart}`
                 .replace(/：/g, ':');
               return `<a href="#bible:${encodeURIComponent(normalizedRef)}" data-bible-ref="${encodeURIComponent(normalizedRef)}">${part}</a>`;
@@ -733,23 +834,27 @@ export default function PostDetailScreen() {
           const isComma = lastSeparator === ',' || lastSeparator === '，';
 
           // 逗号后的裸数字或数字范围（如 14 或 14-15）→ 同章的节号
-          if (isComma && /^\d{1,3}(?:\s*-\s*\d{1,3})?$/.test(trimmed)) {
-            const segVersePart = trimmed.replace(/\s+/g, '');
+          if (isComma && BARE_VERSE_RANGE_RE.test(trimmed)) {
+            const segVersePart = normalizeVersePart(trimmed);
+            if (!segVersePart) return part;
             const normalizedRef = `${normalizedBook}${currentChapter}:${segVersePart}`.replace(/：/g, ':');
             return `<a href="#bible:${encodeURIComponent(normalizedRef)}" data-bible-ref="${encodeURIComponent(normalizedRef)}">${part}</a>`;
           }
 
-          const segmentMatch = trimmed.match(/^(?:第?[ \t\u3000]*(\d{1,3})[ \t\u3000]*[章]?[ \t\u3000]*(?:中|上|下)?[ \t\u3000]*)?(?:[:：][ \t\u3000]*|[ \t\u3000]+)?(\d{1,3}(?:[ \t\u3000]*-[ \t\u3000]*\d{1,3})?)?\s*[节]?$/);
+          const segmentMatch = trimmed.match(SEGMENT_REFERENCE_REGEX);
           if (!segmentMatch) {
             return part;
           }
 
           // 分号或带冒号的格式 → 可能换章
           if (segmentMatch[1]) {
-            currentChapter = segmentMatch[1].trim();
+            const normalizedSegChapter = normalizeBibleNumberToken(segmentMatch[1]);
+            if (!normalizedSegChapter) return part;
+            currentChapter = normalizedSegChapter;
           }
-          const segChapter = (segmentMatch[1] || currentChapter).trim();
-          const segVersePart = segmentMatch[2] ? segmentMatch[2].replace(/[ \t\u3000]+/g, '') : '';
+          const segChapter = currentChapter.trim();
+          const segVersePart = segmentMatch[2] ? normalizeVersePart(segmentMatch[2]) : '';
+          if (segmentMatch[2] && !segVersePart) return part;
           const normalizedRef = segVersePart
             ? `${normalizedBook}${segChapter}:${segVersePart}`.replace(/：/g, ':')
             : `${normalizedBook}${segChapter}`.replace(/：/g, ':');

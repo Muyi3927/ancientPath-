@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
-import { Text, View, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, useColorScheme, Platform, StatusBar, useWindowDimensions } from 'react-native';
+import { Text, View, FlatList, ActivityIndicator, RefreshControl, TouchableOpacity, useColorScheme, Platform, StatusBar, useWindowDimensions, AppState, AppStateStatus } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { Link, useLocalSearchParams, useFocusEffect, useRouter } from 'expo-router';
@@ -28,6 +28,8 @@ export default function HomeScreen() {
   const { width } = useWindowDimensions();
   const carouselRef = useRef<FlatList>(null);
   const [carouselIndex, setCarouselIndex] = useState(0);
+  const appStateRef = useRef<AppStateStatus>(AppState.currentState);
+  const lastForegroundSyncRef = useRef<number>(0);
 
   // 初始化通知服务
   useEffect(() => {
@@ -101,10 +103,10 @@ export default function HomeScreen() {
       }
 
       // 2. 后台刷新数据 (这可能会花费较长时间如果服务器冷启动)
-      await fetchPosts();
+      await fetchPosts(true);
       
       // 3. 检查新文章并发送通知
-      checkForNewPosts().catch(console.error);
+      checkForNewPosts(true).catch(console.error);
     };
 
     init();
@@ -115,6 +117,26 @@ export default function HomeScreen() {
     });
     
     return cleanup;
+  }, []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      const wasBackground = /inactive|background/.test(appStateRef.current);
+      const isNowActive = nextAppState === 'active';
+      appStateRef.current = nextAppState;
+
+      if (!wasBackground || !isNowActive) return;
+
+      const now = Date.now();
+      // Avoid repeated foreground syncs in a short interval.
+      if (now - lastForegroundSyncRef.current < 30_000) return;
+      lastForegroundSyncRef.current = now;
+
+      fetchPosts(true);
+      checkForNewPosts(true).catch(console.error);
+    });
+
+    return () => subscription.remove();
   }, []);
 
   useFocusEffect(
@@ -132,6 +154,10 @@ export default function HomeScreen() {
       
       // 清除通知角标
       clearAllNotifications().catch(console.error);
+
+      // Revalidate on tab focus to keep home list fresh.
+      fetchPosts(true);
+      checkForNewPosts(true).catch(console.error);
     }, [])
   );
   

@@ -6,6 +6,7 @@ import * as Clipboard from 'expo-clipboard';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const NCV_UNLOCK_KEY = 'ncv_unlocked';
+const BIBLE_FONT_SIZE_SCALE_KEY = 'bible_font_size_scale';
 
 interface BibleVerseModalProps {
   isOpen: boolean;
@@ -122,9 +123,12 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
   const [copied, setCopied] = useState(false);
   const [bookName, setBookName] = useState('');
   const [chapter, setChapter] = useState(0);
+  const [endChapter, setEndChapter] = useState(0);
   const [startVerse, setStartVerse] = useState(0);
   const [endVerse, setEndVerse] = useState(0);
   const [showVersionPicker, setShowVersionPicker] = useState(false);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+  const [fontSizeScale, setFontSizeScale] = useState(1.1);
   const [ncvUnlocked, setNcvUnlocked] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [passwordInput, setPasswordInput] = useState('');
@@ -134,7 +138,35 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
     AsyncStorage.getItem(NCV_UNLOCK_KEY).then(value => {
       setNcvUnlocked(value === 'true');
     });
+
+    AsyncStorage.getItem(BIBLE_FONT_SIZE_SCALE_KEY).then(value => {
+      if (!value) return;
+      const parsed = parseFloat(value);
+      if (!Number.isNaN(parsed)) {
+        setFontSizeScale(Math.max(0.8, Math.min(2.0, parsed)));
+      }
+    });
   }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowFontSizePicker(false);
+      setShowVersionPicker(false);
+    }
+  }, [isOpen]);
+
+  const changeFontSize = useCallback((delta: number) => {
+    setFontSizeScale(prev => {
+      const next = Math.max(0.8, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
+      AsyncStorage.setItem(BIBLE_FONT_SIZE_SCALE_KEY, next.toString());
+      return next;
+    });
+  }, []);
+
+  const verseFontSize = Math.round(18 * fontSizeScale);
+  const verseLineHeight = Math.round(28 * fontSizeScale);
+  const englishFontSize = Math.max(14, Math.round(16 * fontSizeScale));
+  const englishLineHeight = Math.round(26 * fontSizeScale);
 
   const availableVersions = useMemo(() => {
     const versions = [
@@ -162,13 +194,27 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
   }, [passwordInput]);
 
   // 解析经文引用，如 "太3:16"、"路1:3-6"、"创3"、"《传道书》4章 9 节"
-  const parseReference = (ref: string): { bookId: number | null; chapter: number; startVerse: number | null; endVerse: number | null } | null => {
+  const parseReference = (ref: string): { bookId: number | null; chapter: number; endChapter: number; startVerse: number | null; endVerse: number | null } | null => {
     // 移除括号与书名号
     const cleanRef = ref.replace(/[《》【】\[\]()（）]/g, '').replace(/\s+/g, ' ').trim();
     if (!cleanRef) return null;
 
+    // 优先匹配：书卷 + 起始章:起始节-结束章:结束节
+    let match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)\s*-\s*(\d+)\s*[:：]\s*(\d+)$/);
+    if (match) {
+      const bookNamePart = match[1].trim();
+      const startChap = parseInt(match[2], 10);
+      const startVers = parseInt(match[3], 10);
+      const endChap = parseInt(match[4], 10);
+      const endVers = parseInt(match[5], 10);
+      const bookId = BOOK_NAME_MAP[bookNamePart];
+      if (!bookId) return null;
+      if (endChap < startChap) return null;
+      return { bookId, chapter: startChap, endChapter: endChap, startVerse: startVers, endVerse: endVers };
+    }
+
     // 优先匹配：书卷 + 章:节(-节)
-    let match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)(?:\s*-\s*(\d+))?$/);
+    match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)(?:\s*-\s*(\d+))?$/);
     if (match) {
       const bookNamePart = match[1].trim();
       const chap = parseInt(match[2], 10);
@@ -176,7 +222,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
       const endVers = match[4] ? parseInt(match[4], 10) : startVers;
       const bookId = BOOK_NAME_MAP[bookNamePart];
       if (!bookId) return null;
-      return { bookId, chapter: chap, startVerse: startVers, endVerse: endVers };
+      return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
     }
 
     // 匹配：书卷 + 章(第)? + 节(第)?，节可选
@@ -191,7 +237,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
     const bookId = BOOK_NAME_MAP[bookNamePart];
     if (!bookId) return null;
 
-    return { bookId, chapter: chap, startVerse: startVers, endVerse: endVers };
+    return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
   };
 
   // 加载经文
@@ -209,25 +255,33 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
           return;
         }
 
-        const { bookId, chapter: chap, startVerse: startV, endVerse: endV } = parsed;
+        const { bookId, chapter: startChap, endChapter: endChap, startVerse: startV, endVerse: endV } = parsed;
         
         if (!bookId) {
           setError('无法找到书卷');
           return;
         }
         
-        setChapter(chap);
+        setChapter(startChap);
+        setEndChapter(endChap);
         setBookName(BOOK_ID_TO_NAME[bookId] || '');
 
         // 切换到正确的圣经版本
         await setActiveBibleVersion(version);
         
-        const fetchedVerses = await getVerses(bookId, chap);
+        const chapterRequests: Promise<BibleVerse[]>[] = [];
+        for (let ch = startChap; ch <= endChap; ch++) {
+          chapterRequests.push(getVerses(bookId, ch));
+        }
+        const chapterResults = await Promise.all(chapterRequests);
+        const fetchedVerses = chapterResults.flat();
         setVerses(fetchedVerses);
 
         if (startV === null) {
           // 仅章节：展示整章
-          const maxVerse = fetchedVerses.reduce((max, v) => Math.max(max, v.VerseSN), 0);
+          const maxVerse = fetchedVerses
+            .filter(v => v.ChapterSN === startChap)
+            .reduce((max, v) => Math.max(max, v.VerseSN), 0);
           setStartVerse(1);
           setEndVerse(maxVerse || 1);
         } else {
@@ -247,15 +301,26 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
 
   const handleCopy = useCallback(async () => {
     const text = verses
-      .filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse)
+      .filter(v => {
+        if (chapter === endChapter) {
+          return v.ChapterSN === chapter && v.VerseSN >= startVerse && v.VerseSN <= endVerse;
+        }
+        if (v.ChapterSN === chapter) {
+          return v.VerseSN >= startVerse;
+        }
+        if (v.ChapterSN === endChapter) {
+          return v.VerseSN <= endVerse;
+        }
+        return v.ChapterSN > chapter && v.ChapterSN < endChapter;
+      })
       .map(v => {
         const parsed = parseVerseLection(v.Lection);
         if (parsed.hasBilingual) {
-          return `【${bookName} ${chapter}:${v.VerseSN}】\n${parsed.chinese}\n${parsed.english}`;
+          return `【${bookName} ${v.ChapterSN}:${v.VerseSN}】\n${parsed.chinese}\n${parsed.english}`;
         }
-        return `【${bookName} ${chapter}:${v.VerseSN}】${parsed.chinese}`;
+        return `【${bookName} ${v.ChapterSN}:${v.VerseSN}】${parsed.chinese}`;
       })
-      .join('\n\n');
+      .join('\n');
     
     await Clipboard.setStringAsync(text);
     setCopied(true);
@@ -263,20 +328,36 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
   }, [verses, startVerse, endVerse, bookName, chapter]);
 
   const displayVerses = useMemo(() => 
-    verses.filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse),
-    [verses, startVerse, endVerse]
+    verses.filter(v => {
+      if (chapter === endChapter) {
+        return v.ChapterSN === chapter && v.VerseSN >= startVerse && v.VerseSN <= endVerse;
+      }
+      if (v.ChapterSN === chapter) {
+        return v.VerseSN >= startVerse;
+      }
+      if (v.ChapterSN === endChapter) {
+        return v.VerseSN <= endVerse;
+      }
+      return v.ChapterSN > chapter && v.ChapterSN < endChapter;
+    }),
+    [verses, chapter, endChapter, startVerse, endVerse]
   );
 
   const renderVerseItem = useCallback(({ item: verse }: { item: BibleVerse }) => (
-    <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 }}>
       <Text style={{ 
         color: isDark ? '#60a5fa' : '#2563eb',
         fontWeight: '600',
         flexShrink: 0,
-        fontSize: 18,
-        width: 30
-      }}>
-        {verse.VerseSN}
+        fontSize: verseFontSize,
+        lineHeight: verseLineHeight,
+        width: chapter === endChapter ? 30 : 64,
+        textAlign: 'right'
+      }}
+      numberOfLines={1}
+      ellipsizeMode="clip"
+      >
+        {chapter === endChapter ? verse.VerseSN : `${verse.ChapterSN}:${verse.VerseSN}`}
       </Text>
       <View style={{ flex: 1 }}>
         {(() => {
@@ -285,8 +366,8 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
             <>
               <Text style={{ 
                 color: isDark ? '#d1d5db' : '#374151',
-                lineHeight: 28,
-                fontSize: 18,
+                lineHeight: verseLineHeight,
+                fontSize: verseFontSize,
                 marginBottom: parsed.hasBilingual ? 6 : 0,
               }}>
                 {parsed.chinese}
@@ -294,8 +375,8 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
               {parsed.hasBilingual && (
                 <Text style={{ 
                   color: isDark ? '#9ca3af' : '#6b7280',
-                  lineHeight: 26,
-                  fontSize: 16,
+                  lineHeight: englishLineHeight,
+                  fontSize: englishFontSize,
                   fontStyle: 'italic',
                 }}>
                   {parsed.english}
@@ -306,7 +387,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
         })()}
       </View>
     </View>
-  ), [isDark]);
+  ), [isDark, chapter, endChapter, verseFontSize, verseLineHeight, englishFontSize, englishLineHeight]);
 
   if (!isOpen) return null;
 
@@ -337,7 +418,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
             shadowOpacity: 0.15,
             shadowRadius: 12,
             elevation: 8,
-            height: '50%',
+            height: '70%',
             borderTopWidth: 2,
             borderLeftWidth: 1,
             borderRightWidth: 1,
@@ -347,12 +428,30 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
           {/* Header */}
           <View className={`flex-row items-center justify-between px-4 py-2 border-b ${isDark ? 'border-gray-700' : 'border-gray-200'}`}>
             <Text className={`text-lg font-semibold ${isDark ? 'text-white' : 'text-gray-900'}`}>
-              {bookName} {chapter}:{startVerse}{endVerse !== startVerse ? `-${endVerse}` : ''}
+              {chapter === endChapter
+                ? `${bookName} ${chapter}:${startVerse}${endVerse !== startVerse ? `-${endVerse}` : ''}`
+                : `${bookName} ${chapter}:${startVerse}-${endChapter}:${endVerse}`}
             </Text>
             <View className="flex-row items-center gap-2">
+              <TouchableOpacity
+                onPress={() => {
+                  setShowVersionPicker(false);
+                  setShowFontSizePicker(prev => !prev);
+                }}
+                className={`flex-row items-center gap-1 px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} border`}
+              >
+                <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                  {(fontSizeScale * 100).toFixed(0)}%
+                </Text>
+                <IconSymbol name="textformat.size" size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+              </TouchableOpacity>
+
               {/* Version Picker */}
               <TouchableOpacity
-                onPress={() => setShowVersionPicker(!showVersionPicker)}
+                onPress={() => {
+                  setShowFontSizePicker(false);
+                  setShowVersionPicker(!showVersionPicker);
+                }}
                 className={`flex-row items-center gap-1 px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} border`}
               >
                 <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
@@ -369,6 +468,38 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* Font Size Picker */}
+          {showFontSizePicker && (
+            <View className={`px-4 py-2 border-b ${isDark ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
+              <View className="flex-row items-center justify-between mb-2">
+                <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>字体大小</Text>
+                <Text className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{(fontSizeScale * 100).toFixed(0)}%</Text>
+              </View>
+              <View className="flex-row items-center justify-between">
+                <TouchableOpacity
+                  onPress={() => changeFontSize(-0.1)}
+                  className={`px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-gray-200'}`}
+                >
+                  <Text className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}>A-</Text>
+                </TouchableOpacity>
+
+                <Text
+                  style={{ fontSize: verseFontSize }}
+                  className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}
+                >
+                  预览经文
+                </Text>
+
+                <TouchableOpacity
+                  onPress={() => changeFontSize(0.1)}
+                  className={`px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-gray-200'}`}
+                >
+                  <Text className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}>A+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Version Picker Dropdown */}
           {showVersionPicker && (
@@ -423,15 +554,10 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
               contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 12 }}
               renderItem={renderVerseItem}
               initialNumToRender={10}
-              maxToRenderPerBatch={5}
+              maxToRenderPerBatch={10}
               updateCellsBatchingPeriod={50}
-              windowSize={3}
-              removeClippedSubviews={true}
-              getItemLayout={(data, index) => ({
-                length: 68,
-                offset: 68 * index,
-                index,
-              })}
+              windowSize={5}
+              removeClippedSubviews={false}
             />
           )}
 
