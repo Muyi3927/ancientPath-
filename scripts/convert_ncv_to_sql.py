@@ -10,6 +10,7 @@ import sys
 import zipfile
 import xml.etree.ElementTree as ET
 from collections import defaultdict
+from typing import Iterable
 
 INPUT_FILE = 'public/圣经新译本.epub'
 OUTPUT_FILE = 'backend/bible_data_ncv.sql'
@@ -71,7 +72,100 @@ def local_name(tag: str) -> str:
 
 
 CHAPTER_HEADER_RE = re.compile(r'^第([一二三四五六七八九十百〇零]+)[章篇]$')
-VERSE_LINE_RE = re.compile(r'^(\d+)\s*[\u3000 ]*(.+)$')
+VERSE_HEAD_RE = re.compile(r'^(\d{1,3})\s*[\u3000 ]+(.+)$')
+INLINE_VERSE_MARK_RE = re.compile(r'(\d{1,3})\s*[\u3000 ]+')
+CROSS_REF_HEADING_RE = re.compile(r'（[^）]*\d+[:：][^）]*）')
+
+
+def normalize_text(text: str) -> str:
+    text = text.replace('\r', '\n')
+    text = text.replace('\u3000', ' ')
+    text = re.sub(r'\s+', ' ', text)
+    return text.strip()
+
+
+def split_inline_verses(text: str) -> list[tuple[int, str]]:
+    """Split a paragraph that may contain multiple verse markers.
+
+    Example: "1 ... 2 ..." -> [(1, "..."), (2, "...")]
+    """
+    chunks: list[tuple[int, str]] = []
+    matches = list(INLINE_VERSE_MARK_RE.finditer(text))
+    if not matches:
+        return chunks
+
+    # Require first verse marker to be at paragraph start (or after one space)
+    first = matches[0]
+    if first.start() > 1:
+        return chunks
+
+    for idx, m in enumerate(matches):
+        verse_sn = int(m.group(1))
+        content_start = m.end()
+        content_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(text)
+        content = normalize_text(text[content_start:content_end])
+        if content:
+            chunks.append((verse_sn, content))
+    return chunks
+
+
+def should_accept_next_verse(current_verse: int | None, candidate: int) -> bool:
+    if candidate < 1 or candidate > 176:
+        return False
+    if current_verse is None:
+        return True
+    if candidate == current_verse + 1:
+        return True
+    # 允许少量跳节（译本偶尔有节号差异），避免把括号里的数字误识别为回退节号。
+    if candidate > current_verse + 1 and candidate - current_verse <= 5:
+        return True
+    return False
+
+
+def is_section_heading(text: str) -> bool:
+    """Heuristic for pericope/section headings between verses."""
+    if CROSS_REF_HEADING_RE.search(text):
+        return True
+    if len(text) <= 24 and not re.search(r'[。！？；]$', text):
+        # 短句且无句末标点，通常是小标题。
+        return True
+    return False
+
+
+def parse_chapter_paragraphs(paragraphs: Iterable[str]) -> list[tuple[int, str]]:
+    verses: list[tuple[int, str]] = []
+    current_verse: int | None = None
+
+    for raw in paragraphs:
+        text = normalize_text(raw)
+        if not text:
+            continue
+
+        # 常见的小标题（含括号交叉引用）直接跳过。
+        if current_verse is None and not text[:1].isdigit():
+            continue
+
+        split_chunks = split_inline_verses(text)
+        if split_chunks:
+            for verse_sn, content in split_chunks:
+                if should_accept_next_verse(current_verse, verse_sn):
+                    verses.append((verse_sn, content))
+                    current_verse = verse_sn
+                elif verses:
+                    # 不是合理的新节号，视为上一节续文。
+                    last_sn, last_text = verses[-1]
+                    verses[-1] = (last_sn, normalize_text(f"{last_text} {verse_sn} {content}"))
+            continue
+
+        if is_section_heading(text):
+            continue
+
+        # 没有节号时，若已有上一节，则视作续文（可覆盖括号注释独立成段的情况）。
+        if verses:
+            last_sn, last_text = verses[-1]
+            verses[-1] = (last_sn, normalize_text(f"{last_text} {text}"))
+
+    return verses
 
 
 def parse_epub_records(epub_path: str) -> list[tuple[int, int, int, str]]:
@@ -140,14 +234,10 @@ def parse_epub_records(epub_path: str) -> list[tuple[int, int, int, str]]:
                 continue
 
             volume_sn = BOOK_SN[book_name]
-            for _, text in lines[start_idx:]:
-                vm = VERSE_LINE_RE.match(text)
-                if not vm:
-                    continue
-                verse_sn = int(vm.group(1))
-                lection = vm.group(2).strip()
-                if lection:
-                    records.append((volume_sn, chapter_number, verse_sn, lection))
+            chapter_paragraphs = [text for _, text in lines[start_idx:]]
+            chapter_verses = parse_chapter_paragraphs(chapter_paragraphs)
+            for verse_sn, lection in chapter_verses:
+                records.append((volume_sn, chapter_number, verse_sn, lection))
 
     return records
 
@@ -157,11 +247,18 @@ def esc(s: str) -> str:
 
 
 def main():
-    records = parse_epub_records(INPUT_FILE)
+    input_file = INPUT_FILE
+    output_file = OUTPUT_FILE
+    if len(sys.argv) > 1:
+        input_file = sys.argv[1]
+    if len(sys.argv) > 2:
+        output_file = sys.argv[2]
+
+    records = parse_epub_records(input_file)
 
     print(f'解析完成，共 {len(records)} 节经文。', file=sys.stderr)
 
-    with open(OUTPUT_FILE, 'w', encoding='utf-8') as out:
+    with open(output_file, 'w', encoding='utf-8') as out:
         out.write('-- Bible data: 圣经新译本 (NCV)\n')
         out.write('-- Auto-generated by convert_ncv_to_sql.py (EPUB parser)\n')
         out.write(f'-- Total verses: {len(records)}\n\n')
@@ -171,7 +268,7 @@ def main():
                 f"VALUES ({vol}, {chap}, {verse}, {esc(lection)}, {esc(VERSION)});\n"
             )
 
-    print(f'SQL 已输出到 {OUTPUT_FILE}', file=sys.stderr)
+    print(f'SQL 已输出到 {output_file}', file=sys.stderr)
 
     # ── 章节数校验 ───────────────────────────────────────────────────
     book_chap_count: dict[int, set[int]] = defaultdict(set)

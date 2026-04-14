@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { X, ChevronLeft, ChevronRight, Copy, Check } from 'lucide-react';
 import { getVerses, getBooks, BibleVerse, BibleVersion, parseVerseLection } from '../services/BibleService';
 
+const BIBLE_FONT_SIZE_SCALE_KEY = 'bible_font_size_scale_web';
+
 interface BibleVerseModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -115,17 +117,70 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
   const [copied, setCopied] = useState(false);
   const [bookName, setBookName] = useState('');
   const [chapter, setChapter] = useState(0);
+  const [endChapter, setEndChapter] = useState(0);
   const [startVerse, setStartVerse] = useState(0);
   const [endVerse, setEndVerse] = useState(0);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+  const [fontSizeScale, setFontSizeScale] = useState(1.1);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(BIBLE_FONT_SIZE_SCALE_KEY);
+      if (!saved) return;
+      const parsed = parseFloat(saved);
+      if (!Number.isNaN(parsed)) {
+        setFontSizeScale(Math.max(0.8, Math.min(2.0, parsed)));
+      }
+    } catch {
+      // Ignore storage errors and keep defaults.
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setShowFontSizePicker(false);
+    }
+  }, [isOpen]);
+
+  const changeFontSize = (delta: number) => {
+    setFontSizeScale(prev => {
+      const next = Math.max(0.8, Math.min(2.0, Math.round((prev + delta) * 10) / 10));
+      try {
+        window.localStorage.setItem(BIBLE_FONT_SIZE_SCALE_KEY, next.toString());
+      } catch {
+        // Ignore storage errors and still update in-memory state.
+      }
+      return next;
+    });
+  };
+
+  const verseFontSize = Math.round(18 * fontSizeScale);
+  const verseLineHeight = Math.round(30 * fontSizeScale);
+  const englishFontSize = Math.max(14, Math.round(16 * fontSizeScale));
+  const englishLineHeight = Math.round(26 * fontSizeScale);
 
   // 解析经文引用，如 "太3:16"、"路1:3-6"、"创3"、"《传道书》4章 9 节"
-  const parseReference = (ref: string): { bookId: number | null; chapter: number; startVerse: number | null; endVerse: number | null } | null => {
+  const parseReference = (ref: string): { bookId: number | null; chapter: number; endChapter: number; startVerse: number | null; endVerse: number | null } | null => {
     // 移除括号与书名号
     const cleanRef = ref.replace(/[《》【】\[\]()（）]/g, '').replace(/\s+/g, ' ').trim();
     if (!cleanRef) return null;
 
+    // 优先匹配：书卷 + 起始章:起始节-结束章:结束节
+    let match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)\s*-\s*(\d+)\s*[:：]\s*(\d+)$/);
+    if (match) {
+      const bookNamePart = match[1].trim();
+      const startChap = parseInt(match[2], 10);
+      const startVers = parseInt(match[3], 10);
+      const endChap = parseInt(match[4], 10);
+      const endVers = parseInt(match[5], 10);
+      const bookId = BOOK_NAME_MAP[bookNamePart];
+      if (!bookId) return null;
+      if (endChap < startChap) return null;
+      return { bookId, chapter: startChap, endChapter: endChap, startVerse: startVers, endVerse: endVers };
+    }
+
     // 优先匹配：书卷 + 章:节(-节)
-    let match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)(?:\s*-\s*(\d+))?$/);
+    match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)(?:\s*-\s*(\d+))?$/);
     if (match) {
       const bookNamePart = match[1].trim();
       const chap = parseInt(match[2], 10);
@@ -133,7 +188,7 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
       const endVers = match[4] ? parseInt(match[4], 10) : startVers;
       const bookId = BOOK_NAME_MAP[bookNamePart];
       if (!bookId) return null;
-      return { bookId, chapter: chap, startVerse: startVers, endVerse: endVers };
+      return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
     }
 
     // 匹配：书卷 + 章(第)? + 节(第)?，节可选
@@ -148,7 +203,7 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
     const bookId = BOOK_NAME_MAP[bookNamePart];
     if (!bookId) return null;
 
-    return { bookId, chapter: chap, startVerse: startVers, endVerse: endVers };
+    return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
   };
 
   // 加载经文
@@ -166,17 +221,25 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
           return;
         }
 
-        const { bookId, chapter: chap, startVerse: startV, endVerse: endV } = parsed;
+        const { bookId, chapter: startChap, endChapter: endChap, startVerse: startV, endVerse: endV } = parsed;
         
-        setChapter(chap);
+        setChapter(startChap);
+        setEndChapter(endChap);
         setBookName(BOOK_ID_TO_NAME[bookId] || '');
 
-        const fetchedVerses = await getVerses(bookId, chap, version);
+        const chapterRequests: Promise<BibleVerse[]>[] = [];
+        for (let ch = startChap; ch <= endChap; ch++) {
+          chapterRequests.push(getVerses(bookId, ch, version));
+        }
+        const chapterResults = await Promise.all(chapterRequests);
+        const fetchedVerses = chapterResults.flat();
         setVerses(fetchedVerses);
 
         if (startV === null) {
           // 仅章节：展示整章
-          const maxVerse = fetchedVerses.reduce((max, v) => Math.max(max, v.VerseSN), 0);
+          const maxVerse = fetchedVerses
+            .filter(v => v.ChapterSN === startChap)
+            .reduce((max, v) => Math.max(max, v.VerseSN), 0);
           setStartVerse(1);
           setEndVerse(maxVerse || 1);
         } else {
@@ -196,10 +259,21 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
 
   const handleCopy = () => {
     const text = verses
-      .filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse)
+      .filter(v => {
+        if (chapter === endChapter) {
+          return v.ChapterSN === chapter && v.VerseSN >= startVerse && v.VerseSN <= endVerse;
+        }
+        if (v.ChapterSN === chapter) {
+          return v.VerseSN >= startVerse;
+        }
+        if (v.ChapterSN === endChapter) {
+          return v.VerseSN <= endVerse;
+        }
+        return v.ChapterSN > chapter && v.ChapterSN < endChapter;
+      })
       .map(v => {
         const parsed = parseVerseLection(v.Lection);
-        const verseHeader = `【${bookName} ${chapter}:${v.VerseSN}】`;
+        const verseHeader = `【${bookName} ${v.ChapterSN}:${v.VerseSN}】`;
         if (parsed.hasBilingual) {
           return `${verseHeader}\n${parsed.chinese}\n${parsed.english}`;
         }
@@ -215,7 +289,18 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
 
   if (!isOpen) return null;
 
-  const displayVerses = verses.filter(v => v.VerseSN >= startVerse && v.VerseSN <= endVerse);
+  const displayVerses = verses.filter(v => {
+    if (chapter === endChapter) {
+      return v.ChapterSN === chapter && v.VerseSN >= startVerse && v.VerseSN <= endVerse;
+    }
+    if (v.ChapterSN === chapter) {
+      return v.VerseSN >= startVerse;
+    }
+    if (v.ChapterSN === endChapter) {
+      return v.VerseSN <= endVerse;
+    }
+    return v.ChapterSN > chapter && v.ChapterSN < endChapter;
+  });
 
   return (
     <div 
@@ -229,12 +314,23 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
         {/* Header */}
         <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {bookName} {chapter}:{startVerse}{endVerse !== startVerse ? `-${endVerse}` : ''}
+            {chapter === endChapter
+              ? `${bookName} ${chapter}:${startVerse}${endVerse !== startVerse ? `-${endVerse}` : ''}`
+              : `${bookName} ${chapter}:${startVerse}-${endChapter}:${endVerse}`}
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowFontSizePicker(prev => !prev)}
+              className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
+            >
+              {(fontSizeScale * 100).toFixed(0)}%
+            </button>
             <select
               value={version}
-              onChange={(e) => onVersionChange?.(e.target.value as BibleVersion)}
+              onChange={(e) => {
+                setShowFontSizePicker(false);
+                onVersionChange?.(e.target.value as BibleVersion);
+              }}
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
             >
               <option value="cuv">和合本</option>
@@ -251,6 +347,32 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
           </div>
         </div>
 
+        {showFontSizePicker && (
+          <div className="px-4 py-2 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/60">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-gray-700 dark:text-gray-200">字体大小</span>
+              <span className="text-sm text-gray-500 dark:text-gray-300">{(fontSizeScale * 100).toFixed(0)}%</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <button
+                onClick={() => changeFontSize(-0.1)}
+                className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold"
+              >
+                A-
+              </button>
+              <span className="text-gray-800 dark:text-gray-100 font-semibold" style={{ fontSize: `${verseFontSize}px` }}>
+                预览经文
+              </span>
+              <button
+                onClick={() => changeFontSize(0.1)}
+                className="px-3 py-1.5 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-800 dark:text-gray-100 font-semibold"
+              >
+                A+
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 overflow-y-auto px-4 py-3">
           {loading ? (
@@ -264,11 +386,24 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
           ) : (
             <div className="space-y-3">
               {displayVerses.map((verse) => (
-                <div key={verse.VerseSN} className="flex gap-3">
-                  <span className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 text-lg">
-                    {verse.VerseSN}
+                <div key={verse.VerseSN} className="flex gap-3 items-start">
+                  <span
+                    className="text-blue-600 dark:text-blue-400 font-semibold flex-shrink-0 text-right"
+                    style={{
+                      fontSize: `${verseFontSize}px`,
+                      lineHeight: `${verseLineHeight}px`,
+                      width: chapter === endChapter ? '2rem' : '4rem',
+                    }}
+                  >
+                    {chapter === endChapter ? verse.VerseSN : `${verse.ChapterSN}:${verse.VerseSN}`}
                   </span>
-                  <div className="text-gray-700 dark:text-gray-300 leading-relaxed text-lg flex-1">
+                  <div
+                    className="text-gray-700 dark:text-gray-300 flex-1"
+                    style={{
+                      fontSize: `${verseFontSize}px`,
+                      lineHeight: `${verseLineHeight}px`,
+                    }}
+                  >
                     {(() => {
                       const parsed = parseVerseLection(verse.Lection);
                       return parsed.hasBilingual ? (
@@ -277,7 +412,9 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
                           <p style={{ 
                             fontStyle: 'italic',
                             color: 'rgb(107, 114, 128)',
-                            marginTop: '0.25rem'
+                            marginTop: '0.25rem',
+                            fontSize: `${englishFontSize}px`,
+                            lineHeight: `${englishLineHeight}px`,
                           }} className="dark:text-gray-400">
                             {parsed.english}
                           </p>
