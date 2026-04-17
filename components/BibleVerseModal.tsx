@@ -308,17 +308,17 @@ const BibleVerseModal: React.FC<BibleVerseModalProps> = ({
       onClick={onClose}
     >
       <div 
-        className="bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:w-[720px] md:max-w-3xl h-[50vh] overflow-hidden flex flex-col mb-16"
+        className="bg-white dark:bg-gray-800 rounded-t-2xl md:rounded-2xl shadow-2xl w-full md:w-[720px] md:max-w-3xl h-[70vh] overflow-hidden flex flex-col mb-0 md:mb-16"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-3 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white break-words">
             {chapter === endChapter
               ? `${bookName} ${chapter}:${startVerse}${endVerse !== startVerse ? `-${endVerse}` : ''}`
               : `${bookName} ${chapter}:${startVerse}-${endChapter}:${endVerse}`}
           </h2>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center justify-end gap-2 w-full sm:w-auto">
             <button
               onClick={() => setShowFontSizePicker(prev => !prev)}
               className="text-sm border border-gray-300 dark:border-gray-600 rounded-lg px-2 py-1 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-200"
