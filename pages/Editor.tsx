@@ -4,6 +4,7 @@ import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
 import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus, AlignLeft, AlignCenter, AlignRight, Home, FileText } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { AlertModal, ConfirmModal, PromptModal } from '../components/AlertDialog';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
 import { generateSummary } from '../services/aiService';
 import { compressImage } from '../services/imageOptimizer';
@@ -55,7 +56,11 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [uploadingAudio, setUploadingAudio] = useState(false);
     const [uploadingPdf, setUploadingPdf] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
-  
+
+  // Dialog states
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  const [promptState, setPromptState] = useState<{ isOpen: boolean; title?: string; message?: string; placeholder?: string; defaultValue?: string; onConfirm: (val: string) => void }>({ isOpen: false, onConfirm: () => {} });
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [showHeadingPicker, setShowHeadingPicker] = useState(false);
   
@@ -177,7 +182,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
         const publicUrl = await uploadFile(fileToUpload);
         insertMarkdown(`![图片描述](${publicUrl})`);
     } catch (e) {
-        alert('图片上传失败');
+        setAlertState({ isOpen: true, message: "图片上传失败", type: "error" });
         console.error(e);
     } finally {
         e.target.value = '';
@@ -207,7 +212,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             insertPdfBlock(publicUrl);
         } catch (err) {
             console.error(err);
-            alert('PDF 上传失败');
+            setAlertState({ isOpen: true, message: "PDF 上传失败", type: "error" });
         } finally {
             setUploadingPdf(false);
             e.target.value = '';
@@ -215,57 +220,71 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
     };
 
     const handleInsertPdfByUrl = () => {
-        const url = window.prompt('请输入 PDF 链接 (https://...)');
-        if (!url) return;
-        insertPdfBlock(url);
+        setPromptState({
+            isOpen: true,
+            title: '插入 PDF',
+            message: '请输入 PDF 链接',
+            placeholder: 'https://...',
+            onConfirm: (val) => {
+                if (val) insertPdfBlock(val);
+            }
+        });
     };
 
   // Tag Management Functions
   const handleRenameTag = async (oldTag: string) => {
       const newTag = newTagName.trim();
       if (!newTag || newTag === oldTag) return;
-      
-      if (!window.confirm(`确定将所有文章中的标签 "${oldTag}" 修改为 "${newTag}" 吗？`)) return;
 
-      const affectedPosts = posts.filter(p => p.tags.includes(oldTag));
-      setIsSubmitting(true);
-      try {
-          await Promise.all(affectedPosts.map(p => {
-              const newTags = p.tags.map(t => t === oldTag ? newTag : t);
-              // Remove duplicates if newTag already existed
-              const uniqueTags = Array.from(new Set(newTags));
-              return updatePost(p.id, { tags: uniqueTags });
-          }));
-          await onRefresh();
-          setEditingTag(null);
-          setNewTagName('');
-          alert(`已更新 ${affectedPosts.length} 篇文章的标签。`);
-      } catch (e) {
-          console.error(e);
-          alert('更新标签失败');
-      } finally {
-          setIsSubmitting(false);
-      }
+      setConfirmState({
+        isOpen: true,
+        message: `确定将所有文章中的标签 "${oldTag}" 修改为 "${newTag}" 吗？`,
+        onConfirm: async () => {
+          const affectedPosts = posts.filter(p => p.tags.includes(oldTag));
+          setIsSubmitting(true);
+          try {
+              await Promise.all(affectedPosts.map(p => {
+                  const newTags = p.tags.map(t => t === oldTag ? newTag : t);
+                  const uniqueTags = Array.from(new Set(newTags));
+                  return updatePost(p.id, { tags: uniqueTags });
+              }));
+              await onRefresh();
+              setEditingTag(null);
+              setNewTagName('');
+              setAlertState({ isOpen: true, message: `已更新 ${affectedPosts.length} 篇文章的标签。`, type: "success" });
+          } catch (e) {
+              console.error(e);
+              setAlertState({ isOpen: true, message: "更新标签失败", type: "error" });
+          } finally {
+              setIsSubmitting(false);
+          }
+        }
+      });
   };
 
   const handleDeleteTagGlobal = async (tag: string) => {
-      if (!window.confirm(`确定要删除标签 "${tag}" 吗？这将从所有包含该标签的文章中移除它。`)) return;
-      
-      const affectedPosts = posts.filter(p => p.tags.includes(tag));
-      setIsSubmitting(true);
-      try {
-          await Promise.all(affectedPosts.map(p => {
-              const newTags = p.tags.filter(t => t !== tag);
-              return updatePost(p.id, { tags: newTags });
-          }));
-          await onRefresh();
-          alert(`已从 ${affectedPosts.length} 篇文章中移除标签 "${tag}"。`);
-      } catch (e) {
-          console.error(e);
-          alert('删除标签失败');
-      } finally {
-          setIsSubmitting(false);
-      }
+      setConfirmState({
+        isOpen: true,
+        message: `确定要删除标签 "${tag}" 吗？这将从所有包含该标签的文章中移除它。`,
+        onConfirm: async () => {
+          const affectedPosts = posts.filter(p => p.tags.includes(tag));
+          setIsSubmitting(true);
+          try {
+              await Promise.all(affectedPosts.map(p => {
+                  const newTags = p.tags.filter(t => t !== tag);
+                  return updatePost(p.id, { tags: newTags });
+              }));
+              await onRefresh();
+              setAlertState({ isOpen: true, message: `已从 ${affectedPosts.length} 篇文章中移除标签 "${tag}"。`, type: "success" });
+          } catch (e) {
+              console.error(e);
+              setAlertState({ isOpen: true, message: "删除标签失败", type: "error" });
+          } finally {
+              setIsSubmitting(false);
+          }
+        },
+        type: 'danger'
+      });
   };
 
   // Drag and Drop State
@@ -315,7 +334,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       else setAudioUrl(publicUrl);
 
     } catch (error) {
-      alert(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setAlertState({ isOpen: true, message: `上传失败: ${error instanceof Error ? error.message : "未知错误"}`, type: "error" });
       console.error(error);
     } finally {
       if (type === 'image') setUploadingImage(false);
@@ -344,20 +363,20 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   };
 
   const handleGenerateSummary = async () => {
-    if (!content) return alert("请先输入文章内容");
+    if (!content) return setAlertState({ isOpen: true, message: "请先输入文章内容", type: "warning" });
     setIsGeneratingSummary(true);
     try {
       const summary = await generateSummary(content);
       setExcerpt(summary);
     } catch (e) {
-      alert("生成摘要失败");
+      setAlertState({ isOpen: true, message: "生成摘要失败", type: "error" });
     } finally {
       setIsGeneratingSummary(false);
     }
   };
 
   const handleSavePost = async (forceDraft: boolean = false) => {
-    if (!title || !content) return alert("标题和内容不能为空");
+    if (!title || !content) return setAlertState({ isOpen: true, message: "标题和内容不能为空", type: "warning" });
     
     // Drafts might not have a category set yet. Default to 0 or first category if available.
     const finalCategoryId = categoryId !== undefined ? categoryId : (categories.length > 0 ? categories[0].id : 0);
@@ -403,7 +422,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
        await onRefresh();
        
        if (forceDraft) {
-           alert('已保存到云端草稿箱！');
+           setAlertState({ isOpen: true, message: '已保存到云端草稿箱！', type: 'success' });
            if (!id && savedPostId) {
                navigate(`/editor/${savedPostId}`, { replace: true });
            }
@@ -412,7 +431,7 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
        }
     } catch (e) {
        console.error("保存失败", e);
-       alert(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
+       setAlertState({ isOpen: true, message: `保存失败: ${e instanceof Error ? e.message : "未知错误"}`, type: "error" });
     } finally {
       setIsSubmitting(false);
       setIsDraftSaving(false);
@@ -491,14 +510,14 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                     
                     <button 
                         onClick={() => setShowOnHomepage(!showOnHomepage)}
-                        className={`p-2 rounded-full transition-all ${showOnHomepage ? 'bg-blue-100 text-blue-500' : 'bg-slate-100 text-slate-400'}`}
+                        className={`p-2 rounded-full transition-all ${showOnHomepage ? 'bg-primary-100 text-primary-500' : 'bg-warm-100 text-text-muted'}`}
                         title={showOnHomepage ? "从首页隐藏" : "显示在首页"}
                     >
                         <Home className={`w-5 h-5 ${showOnHomepage ? 'fill-current' : ''}`} />
                     </button>
                     <button 
                         onClick={() => setIsFeatured(!isFeatured)}
-                        className={`p-2 rounded-full transition-all ${isFeatured ? 'bg-yellow-100 text-yellow-500' : 'bg-slate-100 text-slate-400'}`}
+                        className={`p-2 rounded-full transition-all ${isFeatured ? 'bg-yellow-100 text-yellow-500' : 'bg-warm-100 text-text-muted'}`}
                         title={isFeatured ? "取消精选" : "设为精选"}
                     >
                         <Star className={`w-5 h-5 ${isFeatured ? 'fill-current' : ''}`} />
@@ -909,6 +928,32 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             <MarkdownRenderer content={content || '*预览内容将显示在这里...*'} />
         </div>
       </div>
+
+      {/* Dialogs */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+      />
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        type={confirmState.type}
+      />
+      <PromptModal
+        isOpen={promptState.isOpen}
+        onClose={() => setPromptState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={promptState.onConfirm}
+        title={promptState.title}
+        message={promptState.message}
+        placeholder={promptState.placeholder}
+        defaultValue={promptState.defaultValue}
+      />
     </div>
   );
 };

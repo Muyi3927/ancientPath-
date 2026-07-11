@@ -1,3 +1,57 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+:root {
+  --color-primary-50: #fef8ee;
+  --color-primary-100: #fdf0d6;
+  --color-primary-200: #fbd9a8;
+  --color-primary-300: #f8bf70;
+  --color-primary-400: #f59e38;
+  --color-primary-500: #f27d12;
+  --color-primary-600: #e36208;
+  --color-primary-700: #bc4a09;
+  --color-primary-800: #963a0f;
+  --color-primary-900: #7a3110;
+
+  --color-warm-50: #fdfaf5;
+  --color-warm-100: #f9f2e7;
+  --color-warm-200: #f2e4cc;
+  --color-warm-300: #e8d0a8;
+
+  --color-surface: #ffffff;
+  --color-surface-alt: #faf8f5;
+  --color-border: #e8ddd0;
+  --color-border-light: #f0e8dc;
+
+  --color-text-primary: #3d2e1f;
+  --color-text-secondary: #6d5c4a;
+  --color-text-muted: #a08e7a;
+}
+
+.dark {
+  --color-primary-50: #2a1f0f;
+  --color-primary-100: #3d2c15;
+  --color-primary-200: #5a4220;
+  --color-primary-300: #8b6830;
+  --color-primary-400: #c49040;
+  --color-primary-500: #e8aa50;
+  --color-primary-600: #f0be68;
+  --color-primary-700: #f5d08a;
+  --color-primary-800: #f9deb0;
+  --color-primary-900: #fcecd0;
+
+  --color-warm-50: #12100c;
+  --color-warm-100: #1a1610;
+  --color-warm-200: #252018;
+  --color-warm-300: #352c20;
+
+  --color-surface: #1e1a14;
+  --color-surface-alt: #161310;
+  --color-border: #4a3f30;
+  --color-border-light: #302820;
+
+  --color-text-primary: #f5ece0;
+  --color-text-secondary: #d4c4b0;
+  --color-text-muted: #a89880;
+}

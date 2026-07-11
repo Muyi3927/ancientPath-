@@ -371,8 +371,8 @@ export default function PostDetailScreen() {
                       color={isFavorited ? '#ef4444' : (isDark ? '#fff' : '#000')} 
                     />
                 </Pressable>
-                <Pressable onPress={() => setSettingsVisible(true)} className="mr-4">
-                    <IconSymbol name="textformat.size" size={24} color={isDark ? '#fff' : '#000'} />
+                <Pressable onPress={() => setSettingsVisible(true)} className="mr-4 p-2 rounded-full bg-warm-100 dark:bg-[#252018] border border-border dark:border-[#4a3f30]">
+                    <IconSymbol name="textformat.size" size={18} color={isDark ? '#d4c4b0' : '#6d5c4a'} />
                 </Pressable>
             </View>
           )
@@ -1350,26 +1350,26 @@ export default function PostDetailScreen() {
                     </View>
                     
                     <View className="flex-row items-center justify-between mb-4">
-                        <Text className="text-base text-slate-700 dark:text-slate-300 font-medium">字体大小</Text>
-                        <Text className="text-slate-500 dark:text-slate-400">{(fontSizeScale * 100).toFixed(0)}%</Text>
+                        <Text className="text-base text-text-primary dark:text-[#f5ece0] font-medium">字体大小</Text>
+                        <Text className="text-text-muted dark:text-[#a89880]">{(fontSizeScale * 100).toFixed(0)}%</Text>
                     </View>
-                    
-                    <View className="flex-row items-center justify-between bg-white dark:bg-slate-800 rounded-xl p-2 border border-slate-200 dark:border-slate-700">
-                        <Pressable 
+
+                    <View className="flex-row items-center justify-between bg-white dark:bg-[#252018] rounded-xl p-2 border border-border dark:border-[#4a3f30]">
+                        <Pressable
                             onPress={() => changeFontSize(-0.1)}
-                            className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                            className="p-3 w-12 items-center justify-center bg-warm-100 dark:bg-[#352c20] rounded-lg active:bg-warm-200 dark:active:bg-[#4a3f30]"
                         >
-                            <Text className="text-slate-900 dark:text-white text-lg font-bold">A-</Text>
+                            <Text className="text-text-primary dark:text-[#f5ece0] text-lg font-bold">A-</Text>
                         </Pressable>
-                        
+
                         <View className="flex-1 items-center">
-                             <Text className="text-slate-900 dark:text-white font-serif" style={{ fontSize: 18 * fontSizeScale }}>预览 Text</Text>
+                             <Text className="text-text-primary dark:text-[#f5ece0] font-serif" style={{ fontSize: 18 * fontSizeScale }}>预览 Text</Text>
                         </View>
-                        <Pressable 
+                        <Pressable
                             onPress={() => changeFontSize(0.1)}
-                            className="p-3 w-12 items-center justify-center bg-slate-100 dark:bg-slate-700 rounded-lg active:bg-slate-200 dark:active:bg-slate-600"
+                            className="p-3 w-12 items-center justify-center bg-warm-100 dark:bg-[#352c20] rounded-lg active:bg-warm-200 dark:active:bg-[#4a3f30]"
                         >
-                            <Text className="text-slate-900 dark:text-white text-lg font-bold">A+</Text>
+                            <Text className="text-text-primary dark:text-[#f5ece0] text-lg font-bold">A+</Text>
                         </Pressable>
                     </View>
                     

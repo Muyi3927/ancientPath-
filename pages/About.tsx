@@ -22,7 +22,7 @@ const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, subtitle, content
       >
         <div className="p-4 md:p-6 border-b border-slate-100 dark:border-slate-800 flex justify-between items-start bg-slate-50/50 dark:bg-slate-900/50 z-20">
           <div className="pr-4">
-            <h3 className="text-xl md:text-2xl font-serif font-bold text-slate-900 dark:text-white">{title}</h3>
+            <h3 className="text-xl md:text-2xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">{title}</h3>
             {subtitle && <p className="text-sm md:text-base text-slate-500 dark:text-slate-400 mt-1">{subtitle}</p>}
           </div>
           <button 
@@ -62,7 +62,7 @@ export const About: React.FC = () => {
       <div className="text-center space-y-8 py-6 md:py-12">
         <div className="flex flex-col md:flex-row items-center justify-center gap-4 md:gap-6">
             <img src="/logo.svg" alt="Logo" className="w-16 h-16 md:w-20 md:h-20 rounded-2xl shadow-xl" />
-            <h1 className="text-3xl md:text-5xl font-serif font-bold text-slate-900 dark:text-white tracking-tight">关于访问古道</h1>
+            <h1 className="text-3xl md:text-5xl font-serif font-bold text-text-primary dark:text-[#f5ece0] tracking-tight">关于访问古道</h1>
         </div>
         
         <div className="max-w-3xl mx-auto">
@@ -84,7 +84,7 @@ export const About: React.FC = () => {
                 <Shield className="w-8 h-8 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-                <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white">我们认信</h2>
+                <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">我们认信</h2>
                 <p className="text-slate-500 dark:text-slate-400">We Confess</p>
             </div>
         </div>
@@ -94,7 +94,7 @@ export const About: React.FC = () => {
             <div className="md:bg-white md:dark:bg-slate-900 md:rounded-3xl md:p-8 md:shadow-lg md:border md:border-slate-100 md:dark:border-slate-800">
                 <div className="flex items-center gap-3 mb-6">
                     <Anchor className="w-6 h-6 text-primary-600" />
-                    <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">三大普世信经</h3>
+                    <h3 className="text-2xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">三大普世信经</h3>
                 </div>
                 <p className="text-slate-600 dark:text-slate-400 mb-6 leading-relaxed">
                     {aboutContent.creeds.intro}
@@ -123,7 +123,7 @@ export const About: React.FC = () => {
             <div className="md:bg-white md:dark:bg-slate-900 md:rounded-3xl md:p-8 md:shadow-lg md:border md:border-slate-100 md:dark:border-slate-800">
                  <div className="flex items-center gap-3 mb-6">
                     <Feather className="w-6 h-6 text-primary-600" />
-                    <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">三项联合信条</h3>
+                    <h3 className="text-2xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">三项联合信条</h3>
                 </div>
                 <p className="text-slate-600 dark:text-slate-400 mb-6">
                     作为欧陆改革宗信仰的传承者，我们特别是通过三项联合信条来教导和牧养。
@@ -184,7 +184,7 @@ export const About: React.FC = () => {
                 <Users className="w-8 h-8 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-                <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white">三种教会职分</h2>
+                <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">三种教会职分</h2>
                 <p className="text-slate-500 dark:text-slate-400">Church Offices</p>
             </div>
         </div>
@@ -197,7 +197,7 @@ export const About: React.FC = () => {
                          idx === 1 ? <Shield className="w-6 h-6 text-slate-600 dark:text-slate-300" /> : 
                          <Heart className="w-6 h-6 text-slate-600 dark:text-slate-300" />}
                     </div>
-                    <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-1">{office.title}</h3>
+                    <h3 className="text-xl font-bold text-text-primary dark:text-[#f5ece0] mb-1">{office.title}</h3>
                     <p className="text-sm text-slate-500 uppercase tracking-wider mb-4">{office.role}</p>
                     <p className="text-slate-600 dark:text-slate-400 text-sm mb-6 flex-grow line-clamp-3">
                         {office.content.split('\n')[2] || "点击查看详细职分描述与圣经依据。"}
@@ -220,7 +220,7 @@ export const About: React.FC = () => {
                 <Droplet className="w-8 h-8 text-primary-600 dark:text-primary-400" />
             </div>
             <div>
-                <h2 className="text-3xl font-serif font-bold text-slate-900 dark:text-white">两项圣礼</h2>
+                <h2 className="text-3xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">两项圣礼</h2>
                 <p className="text-slate-500 dark:text-slate-400">Sacraments</p>
             </div>
         </div>
@@ -232,10 +232,10 @@ export const About: React.FC = () => {
                         {idx === 0 ? <Droplet className="w-32 h-32" /> : <Wine className="w-32 h-32" />}
                     </div>
                     <div className="p-8 relative z-10">
-                        <div className="w-12 h-12 rounded-full bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center mb-6">
-                            {idx === 0 ? <Droplet className="w-6 h-6 text-blue-600 dark:text-blue-400" /> : <Wine className="w-6 h-6 text-red-600 dark:text-red-400" />}
+                        <div className="w-12 h-12 rounded-full bg-primary-50 dark:bg-primary-900/20 flex items-center justify-center mb-6">
+                            {idx === 0 ? <Droplet className="w-6 h-6 text-primary-600 dark:text-primary-400" /> : <Wine className="w-6 h-6 text-red-600 dark:text-red-400" />}
                         </div>
-                        <h3 className="text-2xl font-serif font-bold text-slate-900 dark:text-white mb-2">{sacrament.title}</h3>
+                        <h3 className="text-2xl font-serif font-bold text-text-primary dark:text-[#f5ece0] mb-2">{sacrament.title}</h3>
                         <p className="text-slate-500 uppercase text-sm tracking-wider mb-6">{sacrament.subtitle}</p>
                         <button 
                             onClick={() => openModal(sacrament.title, sacrament.content, sacrament.subtitle)}

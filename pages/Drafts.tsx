@@ -1,9 +1,10 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trash2, Edit3, Calendar } from 'lucide-react';
 import { format } from 'date-fns';
 import { BlogPost } from '../types';
 import { deletePost } from '../services/api';
+import { ConfirmModal, AlertModal } from '../components/AlertDialog';
 
 interface DraftsProps {
   posts: BlogPost[];
@@ -15,15 +16,23 @@ export const Drafts: React.FC<DraftsProps> = ({ posts, onRefresh }) => {
   // Filter cloud drafts (marked with __draftTag)
   const drafts = posts.filter(p => p.tags.includes('__draft__'));
 
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; message: string; onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
+
   const handleDelete = async (id: number) => {
-    if (!window.confirm("确定删除此草稿吗？此操作无法撤销。")) return;
-    try {
-        await deletePost(id);
-        await onRefresh();
-    } catch (e) {
-        console.error("删除失败", e);
-        alert("删除草稿失败");
-    }
+    setConfirmState({
+      isOpen: true,
+      message: '确定删除此草稿吗？此操作无法撤销。',
+      onConfirm: async () => {
+        try {
+            await deletePost(id);
+            await onRefresh();
+        } catch (e) {
+            console.error("删除失败", e);
+            setAlertState({ isOpen: true, message: '删除草稿失败', type: 'error' });
+        }
+      }
+    });
   };
 
   const handleEdit = (id: number) => {
@@ -79,6 +88,21 @@ export const Drafts: React.FC<DraftsProps> = ({ posts, onRefresh }) => {
           ))}
         </div>
       )}
+
+      {/* Modals */}
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        message={confirmState.message}
+        type="danger"
+      />
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        message={alertState.message}
+        type={alertState.type}
+      />
     </div>
   );
 };

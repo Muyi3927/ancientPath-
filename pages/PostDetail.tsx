@@ -5,6 +5,7 @@ import { BlogPost, Category } from '../types';
 import { AuthContext } from '../App';
 import MarkdownRenderer from '../components/MarkdownRenderer';
 import BibleVerseModal from '../components/BibleVerseModal';
+import { AlertModal } from '../components/AlertDialog';
 import { ArrowLeft, Calendar, Share2, Tag, Type, Volume2, Edit, Gauge, Trash2, List, X, FileDown, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface PostDetailProps {
@@ -31,6 +32,10 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // Accessibility: Font Size State
   // Default to 1.2 for better readability
   const [fontSizeScale, setFontSizeScale] = useState(1.2);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+
+  // Alert Modal State
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
 
   // Helpers
   const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
@@ -150,9 +155,9 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   const handleShare = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url).then(() => {
-        alert("链接已复制到剪贴板！");
+        setAlertState({ isOpen: true, message: '链接已复制到剪贴板！', type: 'success' });
     }).catch(() => {
-        alert("复制失败，请手动复制网址。");
+        setAlertState({ isOpen: true, message: '复制失败，请手动复制网址。', type: 'error' });
     });
   };
 
@@ -266,21 +271,27 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                 <span>导出 PDF</span>
             </button>
 
-          <div className="flex items-center gap-1 px-3 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 shadow-sm">
-             <Type className="w-4 h-4 text-slate-400 mr-1" />
+          <div className="flex items-center gap-1">
              <button
-                onClick={decreaseFont}
-                className="px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-sm font-bold"
-                title="减小字体"
-             >A-</button>
-             <span className="text-xs font-mono w-10 text-center">{(fontSizeScale * 100).toFixed(0)}%</span>
-             <button
-                onClick={increaseFont}
-                className="px-1.5 py-0.5 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors text-sm font-bold"
-                title="增大字体"
-             >A+</button>
+                onClick={() => setShowFontSizePicker(prev => !prev)}
+                className={`p-2 rounded-full border transition-colors ${showFontSizePicker ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-600' : 'bg-white dark:bg-[#252018] border-border dark:border-[#4a3f30] text-text-secondary dark:text-[#d4c4b0]'}`}
+                title="字体大小"
+             >
+                <Type className="w-4 h-4" />
+             </button>
           </div>
           </div>
+
+          {/* Font Size Picker */}
+          {showFontSizePicker && (
+            <div className="px-4 py-2 border-b border-border dark:border-[#4a3f30] bg-warm-50 dark:bg-[#252018]/60">
+              <div className="flex items-center justify-between">
+                <button onClick={decreaseFont} className="px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30] text-text-primary dark:text-[#f5ece0] font-semibold text-sm">A-</button>
+                <span className="text-text-primary dark:text-[#f5ece0] font-semibold text-sm">{(fontSizeScale * 100).toFixed(0)}%</span>
+                <button onClick={increaseFont} className="px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30] text-text-primary dark:text-[#f5ece0] font-semibold text-sm">A+</button>
+              </div>
+            </div>
+          )}
       </div>
 
       <article className="bg-white dark:bg-slate-900 md:rounded-3xl overflow-hidden shadow-none md:shadow-xl border-y md:border border-slate-100 dark:border-slate-800 -mx-4 md:mx-0">
@@ -303,14 +314,14 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {/* 打印时显示的标题和信息 */}
           <div className="hidden print:block mb-8">
             <h1 className="text-2xl font-serif font-bold text-black mb-2">{post.title}</h1>
-            <div className="flex items-center gap-4 text-sm text-gray-600 mb-4">
+            <div className="flex items-center gap-4 text-sm text-text-secondary mb-4">
               <span>分类：{categoryName}</span>
               <span>发布时间：{format(post.createdAt, 'yyyy年M月d日')}</span>
             </div>
-            <div className="border-b border-gray-300 pb-4 mb-6">
+            <div className="border-b border-border pb-4 mb-6">
               <div className="flex gap-2 flex-wrap">
                 {post.tags.map(tag => (
-                  <span key={tag} className="text-xs px-2 py-1 bg-gray-100 rounded text-gray-600">
+                  <span key={tag} className="text-xs px-2 py-1 bg-warm-100 rounded text-text-secondary">
                     {tag}
                   </span>
                 ))}
@@ -494,13 +505,13 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             {/* Header */}
             <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 dark:border-slate-800">
               <div className="flex items-center gap-3">
-                <h3 className="font-serif font-bold text-xl text-slate-900 dark:text-white">目录</h3>
+                <h3 className="font-serif font-bold text-xl text-text-primary dark:text-[#f5ece0]">目录</h3>
                 <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
                   <button 
                     onClick={() => setTocMaxLevel(2)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                       tocMaxLevel === 2 
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
                   >简</button>
@@ -508,7 +519,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                     onClick={() => setTocMaxLevel(3)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                       tocMaxLevel === 3 
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
                   >中</button>
@@ -516,7 +527,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                     onClick={() => setTocMaxLevel(6)}
                     className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
                       tocMaxLevel === 6 
-                        ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
                         : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                     }`}
                   >详</button>
@@ -560,7 +571,7 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                       style={{ paddingLeft: `${paddingLeft}px` }}
                       className={`py-2 px-3 rounded-lg text-sm transition-all cursor-pointer select-none ${
                         isActive
-                          ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 font-semibold border-l-2 border-blue-500'
+                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-semibold border-l-2 border-primary-500'
                           : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-l-2 border-transparent'
                       }`}
                     >
@@ -575,13 +586,22 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       )}
 
       {/* Bible Verse Modal */}
-      <BibleVerseModal 
+      <BibleVerseModal
         isOpen={showBibleModal}
         onClose={() => setShowBibleModal(false)}
         reference={selectedBibleReference}
         version={bibleVersion}
         onVersionChange={setBibleVersion}
         isAdmin={isAdmin}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
       />
     </div>
   );

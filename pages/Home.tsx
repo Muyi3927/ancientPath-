@@ -189,13 +189,15 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
   // 递归渲染分类树
   const renderCategoryTree = (parentId: number | null = null, level = 0) => {
-      // 查找当前层级的分类（parentId 匹配），并排除被隐藏的分类
-      const cats = categories.filter((c) => c.parentId === parentId && !excludedCategoryIds.has(c.id));
+      // 查找当前层级的分类（parentId 匹配），并排除被隐藏的分类，按自然数排序
+      const cats = categories
+          .filter((c) => c.parentId === parentId && !excludedCategoryIds.has(c.id))
+          .sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true }));
       
       if (cats.length === 0) return null;
 
       return (
-          <ul className={`space-y-1 ${level > 0 ? 'ml-4 border-l border-slate-200 dark:border-slate-800 pl-2' : ''}`}>
+          <ul className={`space-y-1 ${level > 0 ? 'ml-4 border-l border-border dark:border-[#4a3f30] pl-2' : ''}`}>
               {cats.map((cat) => {
                   const hasChildren = categories.some((c) => c.parentId === cat.id);
                   const isExpanded = expandedCategories.has(cat.id);
@@ -203,7 +205,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
 
                   return (
                       <li key={cat.id}>
-                          <div className={`flex items-center justify-between group rounded-lg px-2 py-1.5 transition-colors ${isActive ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-bold' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}>
+                          <div className={`flex items-center justify-between group rounded-lg px-2 py-1.5 transition-colors ${isActive ? 'bg-primary-50 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 font-bold' : 'text-text-secondary dark:text-[#d4c4b0] hover:bg-warm-100 dark:hover:bg-[#252018]'}`}>
                               <button 
                                 onClick={() => handleCategoryClick(cat.id)}
                                 className="flex-grow text-left text-sm flex items-center gap-2"
@@ -211,15 +213,15 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                                   {hasChildren ? (
                                       isExpanded ? <FolderOpen className="w-4 h-4 text-amber-400"/> : <Folder className="w-4 h-4 text-amber-400"/>
                                   ) : (
-                                      <span className="w-4 h-4 block bg-slate-200 dark:bg-slate-700 rounded-full scale-50"></span>
+                                      <span className="w-4 h-4 block bg-warm-200 dark:bg-[#352c20] rounded-full scale-50"></span>
                                   )}
                                   {cat.name}
                               </button>
-                              <span className="text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded-full mr-1">
+                              <span className="text-xs text-text-muted bg-warm-100 dark:bg-[#252018] px-1.5 py-0.5 rounded-full mr-1">
                                   {getCategoryCount(cat.id)}
                               </span>
                               {hasChildren && (
-                                  <button onClick={(e) => toggleExpand(cat.id, e)} className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700">
+                                  <button onClick={(e) => toggleExpand(cat.id, e)} className="p-1 rounded hover:bg-warm-200 dark:hover:bg-[#352c20]">
                                       <ChevronDown className={`w-3 h-3 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                                   </button>
                               )}
@@ -236,8 +238,8 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
     <div className="space-y-4 md:space-y-8">
       {/* Mobile Title */}
       <div className="md:hidden pt-2 text-center">
-          <h1 className="text-2xl font-serif font-bold text-slate-900 dark:text-white">访问古道</h1>
-          <ContentLink to="/about" className="inline-flex items-center gap-1 mt-1 text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors text-xs font-medium">
+          <h1 className="text-2xl font-serif font-bold text-text-primary dark:text-[#f5ece0]">访问古道</h1>
+          <ContentLink to="/about" className="inline-flex items-center gap-1 mt-1 text-text-muted hover:text-text-secondary dark:text-[#a89880] dark:hover:text-[#d4c4b0] transition-colors text-xs font-medium">
              <span>关于我们</span>
              <ChevronRight className="w-3 h-3" />
           </ContentLink>
@@ -266,7 +268,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                                 <h1 className="text-xl md:text-5xl font-serif font-bold text-white mb-2 leading-tight drop-shadow-lg line-clamp-2">
                                     {post.title}
                                 </h1>
-                                <p className="text-slate-200 max-w-2xl text-xs md:text-lg line-clamp-5 drop-shadow-md block">
+                                <p className="text-warm-200 max-w-2xl text-xs md:text-lg line-clamp-5 drop-shadow-md block">
                                     {post.excerpt}
                                 </p>
                             </div>
@@ -308,15 +310,15 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
           {/* Sidebar: Categories (Order 1 on mobile to appear at top) */}
           <div className="lg:col-span-1 order-1 lg:order-1">
               {/* Desktop About Card */}
-              <div className="hidden lg:block bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-6 mb-6">
+              <div className="hidden lg:block bg-white dark:bg-[#1e1a14] rounded-xl border border-border dark:border-[#4a3f30] p-6 mb-6">
                   <div className="flex items-center gap-4 mb-4">
                       <img src="/logo.svg" alt="logo" className="w-12 h-12 rounded-lg shadow-sm" />
                       <div>
-                          <h3 className="font-serif font-bold text-lg text-slate-900 dark:text-white">关于访问古道</h3>
-                          <p className="text-[10px] text-slate-500 uppercase tracking-widest">Ancient Paths</p>
+                          <h3 className="font-serif font-bold text-lg text-text-primary dark:text-[#f5ece0]">关于访问古道</h3>
+                          <p className="text-[10px] text-text-muted uppercase tracking-widest">Ancient Path</p>
                       </div>
                   </div>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 leading-relaxed line-clamp-3">
+                  <p className="text-sm text-text-secondary dark:text-[#d4c4b0] mb-4 leading-relaxed line-clamp-3">
                       我们秉承欧陆改革宗体系，持守加尔文神学，相信三大普世信经和三项联合信条，坚守教会的三种职分（包括牧师、长老和执事），施行两项圣礼（即洗礼和圣餐）， 遵循基于多特法规改编的教会规章，在教导和管理上与欧陆改革宗教会一致。
                   </p>
                   <ContentLink to="/about" className="inline-flex items-center text-primary-600 hover:text-primary-700 text-sm font-bold transition-colors">
@@ -324,18 +326,18 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                   </ContentLink>
               </div>
 
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-4 sticky top-24">
-                  <div 
+              <div className="bg-white dark:bg-[#1e1a14] rounded-xl border border-border dark:border-[#4a3f30] p-4 sticky top-24">
+                  <div
                     className="flex items-center justify-between cursor-pointer lg:cursor-default"
                     onClick={() => window.innerWidth < 1024 && setIsMobileCategoryOpen(!isMobileCategoryOpen)}
                   >
-                      <h3 className="font-bold text-lg font-serif text-slate-900 dark:text-white">分类目录</h3>
+                      <h3 className="font-bold text-lg font-serif text-text-primary dark:text-[#f5ece0]">分类目录</h3>
                       <div className="flex items-center gap-2">
                         {activeCategoryId && (
                             <button onClick={(e) => {e.stopPropagation(); handleCategoryClick(null);}} className="text-xs text-red-500 hover:underline">清除</button>
                         )}
                         {/* Mobile Toggle Chevron */}
-                        <div className="lg:hidden text-slate-400">
+                        <div className="lg:hidden text-text-muted">
                            {isMobileCategoryOpen ? <ChevronUp className="w-5 h-5"/> : <ChevronDown className="w-5 h-5"/>}
                         </div>
                       </div>
@@ -346,16 +348,16 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                       {renderCategoryTree()}
                       
                       {/* Tag Cloud Preview */}
-                      <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
-                          <h3 className="font-bold text-sm mb-4 text-slate-500 dark:text-slate-400 uppercase tracking-wider">热门标签</h3>
+                      <div className="mt-8 pt-6 border-t border-border-light dark:border-[#302820]">
+                          <h3 className="font-bold text-sm mb-4 text-text-muted dark:text-[#a89880] uppercase tracking-wider">热门标签</h3>
                           <div className="flex flex-wrap gap-3 justify-center items-baseline">
                              {Object.entries(tagCounts)
                                 .sort(([,a], [,b]) => b - a) // 按数量排序
                                 .map(([tag, count]) => (
-                                 <Link 
-                                    key={tag} 
-                                    to={`/?tag=${tag}`} 
-                                    className={`${getTagSizeClass(count)} px-2 py-1 rounded-lg text-slate-600 dark:text-slate-400 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all duration-300`}
+                                 <Link
+                                    key={tag}
+                                    to={`/?tag=${tag}`}
+                                    className={`${getTagSizeClass(count)} px-2 py-1 rounded-lg text-text-secondary dark:text-[#d4c4b0] hover:text-primary-600 dark:hover:text-primary-400 hover:bg-warm-100 dark:hover:bg-[#252018] transition-all duration-300`}
                                     title={`${count} 篇文章`}
                                     style={{ opacity: Math.max(0.6, Math.min(1, count / 5)) }} // 根据数量调整透明度
                                  >
@@ -373,7 +375,7 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
              {/* Filters Status */}
              {(searchQuery || tagFilter || activeCategoryId) && (
                 <div className="mb-6 flex items-center gap-2 flex-wrap">
-                   <Filter className="w-4 h-4 text-slate-400" />
+                   <Filter className="w-4 h-4 text-text-muted" />
                    {activeCategoryId && (
                        <span className="px-3 py-1 bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300 rounded-full text-sm font-medium flex items-center gap-1">
                            分类: {getCategoryName(activeCategoryId)}
@@ -387,48 +389,48 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
                        </span>
                    )}
                    {searchQuery && (
-                       <span className="text-sm text-slate-500">搜索: "{searchQuery}"</span>
+                       <span className="text-sm text-text-muted">搜索: "{searchQuery}"</span>
                    )}
                 </div>
              )}
 
              {paginatedPosts.length === 0 ? (
-                <div className="text-center py-20 bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800">
-                  <h3 className="text-xl font-medium text-slate-400">未找到相关文章。</h3>
+                <div className="text-center py-20 bg-white dark:bg-[#1e1a14] rounded-2xl border border-border-light dark:border-[#302820]">
+                  <h3 className="text-xl font-medium text-text-muted">未找到相关文章。</h3>
                   <button onClick={() => {handleCategoryClick(null); clearTagFilter(); setSearchParams({});}} className="mt-4 text-primary-600 font-bold">查看全部</button>
                 </div>
               ) : (
                 <div className="space-y-4 md:space-y-6">
                   {paginatedPosts.map((post) => (
-                    <article key={post.id} className="group bg-white dark:bg-slate-900 rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col md:flex-row">
+                    <article key={post.id} className="group bg-white dark:bg-[#1e1a14] rounded-2xl overflow-hidden border border-border-light dark:border-[#302820] shadow-sm hover:shadow-lg transition-all duration-300 flex flex-col md:flex-row">
                       <ContentLink to={`/post/${post.id}`} className="block relative overflow-hidden w-full md:w-1/3 h-40 md:min-h-full flex-shrink-0">
                         <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                        <div className="absolute top-3 left-3 bg-black/50 backdrop-blur text-[10px] md:text-xs font-bold px-2 py-1 rounded text-white">
+                        <div className="absolute top-3 left-3 bg-primary-600/90 backdrop-blur text-[10px] md:text-xs font-bold px-2 py-1 rounded text-white">
                           {getCategoryName(post.categoryId)}
                         </div>
                       </ContentLink>
                       <div className="p-4 md:p-6 flex flex-col flex-grow justify-between">
                          <div>
-                             <div className="flex items-center gap-2 mb-2 text-[10px] md:text-xs text-slate-500 dark:text-slate-400">
+                             <div className="flex items-center gap-2 mb-2 text-[10px] md:text-xs text-text-muted dark:text-[#a89880]">
                                 <Clock className="w-3 h-3" />
                                 {format(post.createdAt, 'yyyy年M月d日')}
                              </div>
                              <ContentLink to={`/post/${post.id}`} className="block">
-                               <h2 className="text-lg md:text-xl font-serif font-bold mb-2 text-slate-900 dark:text-slate-100 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-1">
+                               <h2 className="text-lg md:text-xl font-serif font-bold mb-2 text-text-primary dark:text-[#f5ece0] group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors line-clamp-1">
                                  {post.title}
                                </h2>
                               </ContentLink>
-                             <p className="text-slate-600 dark:text-slate-400 text-xs md:text-sm leading-relaxed mb-3 md:mb-4">
+                             <p className="text-text-secondary dark:text-[#d4c4b0] text-xs md:text-sm leading-relaxed mb-3 md:mb-4">
                                {post.excerpt}
                              </p>
                          </div>
                          <div className="flex items-center justify-between mt-auto">
                             <div className="flex gap-2 flex-wrap">
                               {post.tags.slice(0, 3).map((tag) => (
-                                <Link 
-                                  key={tag} 
+                                <Link
+                                  key={tag}
                                   to={`/?tag=${tag}`}
-                                  className="flex items-center text-[10px] md:text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded text-slate-500 hover:text-primary-600 transition-colors"
+                                  className="flex items-center text-[10px] md:text-xs bg-warm-100 dark:bg-[#252018] px-2 py-1 rounded text-text-muted hover:text-primary-600 transition-colors"
                                 >
                                    <Tag className="w-3 h-3 mr-1" /> {tag}
                                 </Link>
@@ -447,22 +449,22 @@ export const Home: React.FC<HomeProps> = ({ posts, categories }) => {
              {/* Pagination Controls */}
              {totalPages > 1 && (
                  <div className="flex justify-center items-center mt-12 gap-2">
-                     <button 
+                     <button
                         onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                         disabled={currentPage === 1}
-                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-2 rounded-lg border border-border dark:border-[#4a3f30] hover:bg-warm-100 dark:hover:bg-[#252018] disabled:opacity-30 disabled:cursor-not-allowed"
                      >
                          <ChevronLeft className="w-5 h-5" />
                      </button>
-                     
-                     <span className="text-sm font-medium text-slate-500 mx-2">
+
+                     <span className="text-sm font-medium text-text-muted mx-2">
                          第 {currentPage} 页 / 共 {totalPages} 页
                      </span>
 
-                     <button 
+                     <button
                         onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
                         disabled={currentPage === totalPages}
-                        className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed"
+                        className="p-2 rounded-lg border border-border dark:border-[#4a3f30] hover:bg-warm-100 dark:hover:bg-[#252018] disabled:opacity-30 disabled:cursor-not-allowed"
                      >
                          <ChevronRight className="w-5 h-5" />
                      </button>

@@ -304,7 +304,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
   }, [content]);
   return (
     <div 
-      className={`prose dark:prose-invert max-w-none prose-img:rounded-xl prose-headings:font-serif prose-a:text-primary-600 print:max-w-none print:prose-headings:text-black print:prose-p:text-black print:prose-li:text-black print:prose-a:text-blue-600 print:prose-blockquote:text-gray-600 ${className}`} 
+      className={`prose dark:prose-invert max-w-none prose-img:rounded-xl prose-headings:font-serif prose-a:text-primary-600 print:max-w-none print:prose-headings:text-black print:prose-p:text-black print:prose-li:text-black print:prose-a:text-primary-600 print:prose-blockquote:text-text-secondary ${className}`} 
       style={{
         ...style,
         wordSpacing: '0.05em',
@@ -331,7 +331,7 @@ const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content, className 
                       e.preventDefault();
                       onBibleVerseClick?.(reference);
                     }}
-                    className="text-blue-600 dark:text-blue-400 hover:underline cursor-pointer font-medium"
+                    className="text-primary-600 dark:text-primary-400 hover:underline cursor-pointer font-medium"
                   >
                     {props.children}
                   </button>

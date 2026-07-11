@@ -229,7 +229,7 @@ export default function HomeScreen() {
     const isOffline = offlinePosts.has(item.id);
     return (
     <Link href={`/post/${item.id}`} asChild>
-      <TouchableOpacity className={`bg-white dark:bg-slate-900 p-4 mb-4 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mx-4 active:opacity-70 ${isRead ? 'opacity-80 bg-slate-50 dark:bg-slate-900/50' : ''}`}>
+      <TouchableOpacity className={`bg-white dark:bg-[#1e1a14] p-4 mb-4 rounded-2xl shadow-sm border border-border-light dark:border-[#302820] mx-4 active:opacity-70 ${isRead ? 'opacity-80 bg-warm-50 dark:bg-[#1e1a14]/50' : ''}`}>
         <View className="relative">
             {item.coverImage ? (
             <View className={`w-full h-48 rounded-xl mb-3 overflow-hidden ${isRead ? 'opacity-90' : ''}`}>
@@ -241,8 +241,8 @@ export default function HomeScreen() {
               />
             </View>
             ) : null}
-            {item.categoryId && getCategoryName(item.categoryId) ? (
-                <View className="absolute top-2 left-2 bg-blue-600/90 px-2.5 py-1 rounded-md shadow-sm backdrop-blur-md">
+            {item.categoryId ? (
+                <View className="absolute top-2 left-2 bg-primary-600/90 px-2.5 py-1 rounded-md shadow-sm backdrop-blur-md">
                     <Text className="text-white text-xs font-bold tracking-wide">
                         {getCategoryName(item.categoryId)}
                     </Text>
@@ -264,29 +264,29 @@ export default function HomeScreen() {
             </View>
         </View>
 
-        <Text className={`text-lg font-bold mb-2 leading-tight ${isRead ? 'text-slate-600 dark:text-slate-400' : 'text-slate-900 dark:text-white'}`}>{item.title}</Text>
-        <Text className="text-slate-600 dark:text-slate-400 text-sm mb-3 leading-relaxed" numberOfLines={10}>{item.excerpt}</Text>
+        <Text className={`text-lg font-bold mb-2 leading-tight ${isRead ? 'text-text-secondary dark:text-[#d4c4b0]' : 'text-text-primary dark:text-[#f5ece0]'}`}>{item.title}</Text>
+        <Text className="text-text-secondary dark:text-[#d4c4b0] text-sm mb-3 leading-relaxed" numberOfLines={10}>{item.excerpt}</Text>
         
         {/* Tags */}
         {item.tags && item.tags.length > 0 && (
           <View className="flex-row flex-wrap mb-3">
             {item.tags.map((tag, index) => (
-              <View key={index} className="bg-slate-100 dark:bg-slate-800 px-2.5 py-1 rounded-md mr-2 mb-1">
-                <Text className="text-xs text-slate-600 dark:text-slate-300 font-medium">{tag}</Text>
+              <View key={index} className="bg-warm-100 dark:bg-[#252018] px-2.5 py-1 rounded-md mr-2 mb-1">
+                <Text className="text-xs text-text-secondary dark:text-[#d4c4b0] font-medium">{tag}</Text>
               </View>
             ))}
           </View>
         )}
 
-        <View className="flex-row justify-between items-center pt-2 border-t border-slate-50 dark:border-slate-800">
-          <Text className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+        <View className="flex-row justify-between items-center pt-2 border-t border-border-light dark:border-[#302820]">
+          <Text className="text-xs text-text-muted dark:text-[#a89880] font-medium">
             {new Date(item.createdAt).toLocaleDateString()}
-            {isRead && <Text className="text-slate-400 ml-2"> • 已读</Text>}
+            {isRead && <Text className="text-text-muted ml-2"> • 已读</Text>}
             {isFavorited && <Text className="text-red-500 ml-2"> • 已收藏</Text>}
           </Text>
           <View className="flex-row items-center">
-            <Text className={`text-xs font-bold mr-1 ${isRead ? 'text-slate-500' : 'text-blue-600 dark:text-blue-400'}`}>阅读更多</Text>
-            <IconSymbol name="chevron.right" size={12} color={isRead ? '#94a3b8' : (isDark ? '#60a5fa' : '#2563eb')} />
+            <Text className={`text-xs font-bold mr-1 ${isRead ? 'text-text-muted' : 'text-primary-600 dark:text-primary-400'}`}>阅读更多</Text>
+            <IconSymbol name="chevron.right" size={12} color={isRead ? '#a08e7a' : (isDark ? '#f59e38' : '#e36208')} />
           </View>
         </View>
       </TouchableOpacity>
@@ -295,37 +295,37 @@ export default function HomeScreen() {
   };
 
   const renderHeader = () => (
-    <View 
-      className="bg-slate-100 dark:bg-black"
+    <View
+      className="bg-warm-100 dark:bg-[#12100c]"
       style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) + 5 : 5 }}
     >
       <View className="items-center mb-2 px-4">
         <Link href="/about" asChild>
           <TouchableOpacity className="items-center">
-            <Text className="text-2xl font-bold text-slate-900 dark:text-white font-serif tracking-tight">访问古道</Text>
+            <Text className="text-2xl font-bold text-text-primary dark:text-[#f5ece0] font-serif tracking-tight">访问古道</Text>
             <View className="flex-row items-center mt-1 opacity-60">
-                <Text className="text-xs text-slate-500 dark:text-slate-400">关于我们</Text>
-                <IconSymbol name="chevron.right" size={10} color={isDark ? '#94a3b8' : '#64748b'} />
+                <Text className="text-xs text-text-muted dark:text-[#a89880]">关于我们</Text>
+                <IconSymbol name="chevron.right" size={10} color={isDark ? '#a89880' : '#6d5c4a'} />
             </View>
           </TouchableOpacity>
         </Link>
       </View>
 
       {/* Search Bar */}
-      <TouchableOpacity 
-        className="mx-4 mb-4 bg-white dark:bg-slate-900 rounded-full px-4 py-3 flex-row items-center shadow-sm border border-slate-200 dark:border-slate-700"
+      <TouchableOpacity
+        className="mx-4 mb-4 bg-white dark:bg-[#1e1a14] rounded-full px-4 py-3 flex-row items-center shadow-sm border border-border dark:border-[#4a3f30]"
         onPress={() => router.push('/search')}
       >
-        <IconSymbol name="magnifyingglass" size={18} color={isDark ? '#9ca3af' : '#6b7280'} />
-        <Text className="ml-2 text-slate-500 dark:text-slate-400">搜索讲道、标签...</Text>
+        <IconSymbol name="magnifyingglass" size={18} color={isDark ? '#a89880' : '#6d5c4a'} />
+        <Text className="ml-2 text-text-muted dark:text-[#a89880]">搜索讲道、标签...</Text>
       </TouchableOpacity>
 
       {/* Featured Carousel - Single View Implementation */}
       {!categoryId && featuredPosts.length > 0 && (
         <View className="mb-6 px-4">
-          <Text className="text-lg font-bold text-slate-900 dark:text-white mb-3 ml-1">精选讲道</Text>
-          
-          <View className="relative rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-800 h-48 shadow-sm">
+          <Text className="text-lg font-bold text-text-primary dark:text-[#f5ece0] mb-3 ml-1">精选讲道</Text>
+
+          <View className="relative rounded-2xl overflow-hidden bg-warm-200 dark:bg-[#252018] h-48 shadow-sm">
             <Link href={`/post/${featuredPosts[carouselIndex].id}`} asChild>
               <TouchableOpacity className="w-full h-full active:opacity-90">
                 {featuredPosts[carouselIndex].coverImage ? (
@@ -343,8 +343,8 @@ export default function HomeScreen() {
                 <View className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent" />
 
                 {/* Category Label */}
-                {featuredPosts[carouselIndex].categoryId && getCategoryName(featuredPosts[carouselIndex].categoryId) ? (
-                    <View className="absolute top-2 left-2 bg-blue-600 px-2.5 py-1 rounded-full shadow-lg z-10">
+                {featuredPosts[carouselIndex].categoryId ? (
+                    <View className="absolute top-2 left-2 bg-primary-600 px-2.5 py-1 rounded-full shadow-lg z-10">
                         <Text className="text-white text-xs font-bold tracking-wide">
                             {getCategoryName(featuredPosts[carouselIndex].categoryId)}
                         </Text>
@@ -406,14 +406,14 @@ export default function HomeScreen() {
 
   if (loading && !refreshing && allPosts.length === 0) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-100 dark:bg-black">
+      <SafeAreaView className="flex-1 bg-warm-100 dark:bg-[#12100c]">
         <FlatList
           data={[1, 2, 3, 4]}
           renderItem={() => <SkeletonPost />}
           keyExtractor={(item) => item.toString()}
           ListHeaderComponent={renderHeader}
           contentContainerStyle={{ paddingBottom: 20 }}
-          scrollEnabled={false} 
+          scrollEnabled={false}
         />
       </SafeAreaView>
     );
@@ -421,14 +421,14 @@ export default function HomeScreen() {
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-slate-100 dark:bg-black">
+      <SafeAreaView className="flex-1 bg-warm-100 dark:bg-[#12100c]">
         {renderHeader()}
         <View className="flex-1 items-center justify-center px-4">
           <Text className="text-red-500 text-lg mb-2">出错了</Text>
-          <Text className="text-slate-600 dark:text-slate-400 text-center mb-4">{error}</Text>
-          <TouchableOpacity 
+          <Text className="text-text-secondary dark:text-[#d4c4b0] text-center mb-4">{error}</Text>
+          <TouchableOpacity
             onPress={() => fetchPosts()}
-            className="bg-blue-600 px-6 py-2 rounded-full"
+            className="bg-primary-600 px-6 py-2 rounded-full"
           >
             <Text className="text-white font-bold">重试</Text>
           </TouchableOpacity>
@@ -438,18 +438,18 @@ export default function HomeScreen() {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-slate-100 dark:bg-black">
+    <SafeAreaView className="flex-1 bg-warm-100 dark:bg-[#12100c]">
       <FlatList
         data={filteredPosts}
         renderItem={renderItem}
         keyExtractor={(item) => item.id.toString()}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#fff" : "#000"} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={isDark ? "#f59e38" : "#e36208"} />
         }
         ListHeaderComponent={renderHeader}
         ListEmptyComponent={
           <View className="items-center justify-center py-20">
-            <Text className="text-slate-400 dark:text-slate-500">暂无讲道</Text>
+            <Text className="text-text-muted dark:text-[#a89880]">暂无讲道</Text>
           </View>
         }
         contentContainerStyle={{ paddingBottom: 20 }}

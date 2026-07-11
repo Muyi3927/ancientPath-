@@ -50,9 +50,9 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
   const isBiblePage = location.pathname === '/bible';
 
   return (
-    <div className="h-screen flex flex-col bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300 font-sans overflow-hidden">
+    <div className="h-screen flex flex-col bg-warm-50 dark:bg-[#1e1a14] text-text-primary dark:text-[#f5ece0] transition-colors duration-300 font-sans overflow-hidden">
       {/* Navbar - Hidden on Mobile */}
-      <nav className={`flex-none z-50 w-full backdrop-blur-md bg-white/70 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-800 print:hidden transition-all duration-500 ease-in-out hidden md:block ${isBiblePage ? 'fixed top-0 left-0 right-0' : 'sticky top-0'} ${isMenuVisible ? 'translate-y-0' : `-translate-y-full ${!isBiblePage ? '-mb-16' : ''}`}`}>
+      <nav className={`flex-none z-50 w-full backdrop-blur-md bg-white/80 dark:bg-[#1e1a14]/80 border-b border-border dark:border-[#4a3f30] print:hidden transition-all duration-500 ease-in-out hidden md:block ${isBiblePage ? 'fixed top-0 left-0 right-0' : 'sticky top-0'} ${isMenuVisible ? 'translate-y-0' : `-translate-y-full ${!isBiblePage ? '-mb-16' : ''}`}`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             
@@ -61,8 +61,8 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               <NavLink to="/" className="flex items-center gap-3">
                 <img src="/logo.svg" alt="Logo" className="w-9 h-9 rounded-lg shadow-lg" />
                 <div className="flex flex-col -space-y-1">
-                   <span className="font-serif font-bold text-lg tracking-tight text-slate-900 dark:text-slate-100">访问古道</span>
-                   <span className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest">Ask for the Ancient Paths</span>
+                   <span className="font-heading font-bold text-lg tracking-tight text-text-primary dark:text-[#f5ece0]">访问古道</span>
+                   <span className="text-[10px] text-text-muted dark:text-[#a89880] uppercase tracking-widest">Ask for the Ancient Path</span>
                 </div>
               </NavLink>
             </div>
@@ -92,14 +92,14 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               
               {/* Search Bar */}
               <form onSubmit={handleSearch} className="relative">
-                <input 
-                  type="text" 
-                  placeholder="搜索布道、文章..." 
+                <input
+                  type="text"
+                  placeholder="搜索布道、文章..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-9 pr-4 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm w-48 transition-all focus:w-64 border border-transparent focus:border-primary-500"
+                  className="pl-9 pr-4 py-1.5 rounded-full bg-warm-100 dark:bg-[#252018] focus:outline-none focus:ring-2 focus:ring-primary-500 text-sm w-48 transition-all focus:w-64 border border-border-light dark:border-[#302820] focus:border-primary-500"
                 />
-                <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                <Search className="w-4 h-4 absolute left-3 top-2.5 text-text-muted" />
               </form>
             </div>
 
@@ -108,28 +108,28 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
               {/* Cache Indicator */}
               <CacheIndicator className="hidden lg:flex" />
               
-              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors hidden md:block">
-                {isDark ? <Sun className="w-5 h-5 text-amber-400" /> : <Moon className="w-5 h-5 text-slate-600" />}
+              <button onClick={toggleTheme} className="p-2 rounded-full hover:bg-warm-200 dark:hover:bg-[#352c20] transition-colors hidden md:block">
+                {isDark ? <Sun className="w-5 h-5 text-primary-400" /> : <Moon className="w-5 h-5 text-text-muted" />}
               </button>
 
               {isAuthenticated && (
                 <div className="flex items-center gap-4">
                   {isAdmin && (
                     <div className="flex items-center gap-2">
-                        <NavLink to="/editor" className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200 dark:text-slate-900 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-lg">
+                        <NavLink to="/editor" className="flex items-center gap-2 bg-primary-600 hover:bg-primary-700 text-white px-4 py-2 rounded-full text-sm font-medium transition-colors shadow-lg">
                         <PenTool className="w-4 h-4" />
                         <span className="hidden sm:inline">撰写</span>
                         </NavLink>
-                        <NavLink to="/drafts" className="flex items-center gap-2 bg-amber-100 hover:bg-amber-200 text-amber-800 px-4 py-2 rounded-full text-sm font-medium transition-colors">
+                        <NavLink to="/drafts" className="flex items-center gap-2 bg-primary-100 hover:bg-primary-200 text-primary-700 px-4 py-2 rounded-full text-sm font-medium transition-colors">
                         <span className="hidden sm:inline">草稿箱</span>
                         <span className="sm:hidden">草稿</span>
                         </NavLink>
                     </div>
                   )}
                   <div className="flex items-center gap-2">
-                    <img src={user?.avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-700" />
+                    <img src={user?.avatarUrl} alt="Avatar" className="w-8 h-8 rounded-full border border-border dark:border-[#4a3f30]" />
                     <button onClick={logout} title="退出登录" className="hidden md:block">
-                       <LogOut className="w-5 h-5 text-slate-500 hover:text-red-500 transition-colors" />
+                       <LogOut className="w-5 h-5 text-text-muted hover:text-red-500 transition-colors" />
                     </button>
                   </div>
                 </div>
@@ -149,13 +149,13 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
 
         {/* Footer */}
         {!isFullWidthPage && (
-        <footer className="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 py-6 print:hidden pb-24 md:pb-6">
+        <footer className="bg-white dark:bg-[#1a1610] border-t border-border dark:border-[#4a3f30] py-6 print:hidden pb-24 md:pb-6">
           <div className="max-w-7xl mx-auto px-4 text-center">
-            <div 
-              className="text-xs text-slate-400 cursor-text select-none"
+            <div
+              className="text-xs text-text-muted cursor-text select-none"
               onClick={handleHiddenLoginClick}
             >
-              &copy; {new Date().getFullYear()} 访问古道 (Ancient Paths). 唯独荣耀归于神.
+              &copy; {new Date().getFullYear()} 访问古道 (Ancient Path). 唯独荣耀归于神.
             </div>
           </div>
         </footer>
@@ -163,24 +163,24 @@ export const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
       </div>
 
       {/* Bottom Nav for Mobile */}
-      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-slate-900 flex justify-around items-center h-16 z-50 pb-safe transition-transform duration-500 ease-in-out print:hidden ${isMenuVisible ? 'translate-y-0' : 'translate-y-full'}`}>
-        <Link to="/" className={`flex flex-col items-center p-2 ${isActive('/') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+      <div className={`md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1e1a14] border-t border-border dark:border-[#4a3f30] flex justify-around items-center h-16 z-50 pb-safe transition-transform duration-500 ease-in-out print:hidden ${isMenuVisible ? 'translate-y-0' : 'translate-y-full'}`}>
+        <Link to="/" className={`flex flex-col items-center p-2 ${isActive('/') ? 'text-primary-600 dark:text-primary-400' : 'text-text-muted dark:text-[#a89880]'}`}>
           <Home className="w-6 h-6" />
           <span className="text-[10px] mt-1">首页</span>
         </Link>
-        <Link to="/bible" className={`flex flex-col items-center p-2 ${isActive('/bible') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        <Link to="/bible" className={`flex flex-col items-center p-2 ${isActive('/bible') ? 'text-primary-600 dark:text-primary-400' : 'text-text-muted dark:text-[#a89880]'}`}>
           <BookOpen className="w-6 h-6" />
           <span className="text-[10px] mt-1">圣经</span>
         </Link>
-        <Link to="/categories" className={`flex flex-col items-center p-2 ${isActive('/categories') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        <Link to="/categories" className={`flex flex-col items-center p-2 ${isActive('/categories') ? 'text-primary-600 dark:text-primary-400' : 'text-text-muted dark:text-[#a89880]'}`}>
           <LayoutGrid className="w-6 h-6" />
           <span className="text-[10px] mt-1">分类</span>
         </Link>
-        <Link to="/hymns" className={`flex flex-col items-center p-2 ${isActive('/hymns') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        <Link to="/hymns" className={`flex flex-col items-center p-2 ${isActive('/hymns') ? 'text-primary-600 dark:text-primary-400' : 'text-text-muted dark:text-[#a89880]'}`}>
           <Music className="w-6 h-6" />
           <span className="text-[10px] mt-1">诗歌</span>
         </Link>
-        <Link to="/app" className={`flex flex-col items-center p-2 ${isActive('/app') ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`}>
+        <Link to="/app" className={`flex flex-col items-center p-2 ${isActive('/app') ? 'text-primary-600 dark:text-primary-400' : 'text-text-muted dark:text-[#a89880]'}`}>
           <Download className="w-6 h-6" />
           <span className="text-[10px] mt-1">下载</span>
         </Link>

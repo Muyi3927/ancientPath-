@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { RefreshCw, Database, Clock, Trash2 } from 'lucide-react';
 import { getCacheStats, clearCache, refreshAllCache } from '../services/api';
+import { ConfirmModal } from './AlertDialog';
 
 interface CacheManagerProps {
   className?: string;
@@ -10,6 +11,7 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
   const [stats, setStats] = useState({ memorySize: 0, localStorageSize: 0, sessionStorageSize: 0 });
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; message: string; onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
 
   const updateStats = () => {
     setStats(getCacheStats());
@@ -17,8 +19,7 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
 
   useEffect(() => {
     updateStats();
-    // 定期更新统计信息
-    const interval = setInterval(updateStats, 30000); // 30秒
+    const interval = setInterval(updateStats, 30000);
     return () => clearInterval(interval);
   }, []);
 
@@ -35,21 +36,26 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
   };
 
   const handleClearCache = (type: 'posts' | 'categories' | 'all') => {
-    if (confirm(`确定要清除${type === 'all' ? '所有' : type}缓存吗？`)) {
-      clearCache(type);
-      updateStats();
-    }
+    const label = type === 'all' ? '所有' : type === 'posts' ? '文章' : '分类';
+    setConfirmState({
+      isOpen: true,
+      message: `确定要清除${label}缓存吗？`,
+      onConfirm: () => {
+        clearCache(type);
+        updateStats();
+      }
+    });
   };
 
   const totalCacheSize = stats.memorySize + stats.localStorageSize + stats.sessionStorageSize;
 
   return (
-    <div className={`bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 ${className}`}>
+    <div className={`bg-white dark:bg-[#252018] rounded-lg border border-border dark:border-[#4a3f30] ${className}`}>
       {/* 简洁状态指示器 */}
       <div className="flex items-center justify-between p-3">
         <div className="flex items-center space-x-2">
-          <Database size={16} className="text-blue-500" />
-          <span className="text-sm text-gray-600 dark:text-gray-400">
+          <Database size={16} className="text-primary-500" />
+          <span className="text-sm text-text-secondary dark:text-text-muted">
             缓存: {totalCacheSize} 项
           </span>
           {totalCacheSize > 0 && (
@@ -60,7 +66,7 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
         <div className="flex items-center space-x-1">
           <button
             onClick={() => setShowDetails(!showDetails)}
-            className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300"
+            className="p-1 text-text-muted hover:text-text-secondary dark:hover:text-[#f5ece0]"
             title="显示详情"
           >
             <Clock size={14} />
@@ -68,7 +74,7 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
           <button
             onClick={handleRefreshCache}
             disabled={isRefreshing}
-            className="p-1 text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 disabled:opacity-50"
+            className="p-1 text-text-muted hover:text-text-secondary dark:hover:text-[#f5ece0] disabled:opacity-50"
             title="刷新缓存"
           >
             <RefreshCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
@@ -78,20 +84,20 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
 
       {/* 详细信息面板 */}
       {showDetails && (
-        <div className="border-t border-gray-200 dark:border-gray-700 p-3 space-y-3">
+        <div className="border-t border-border dark:border-[#4a3f30] p-3 space-y-3">
           {/* 缓存统计 */}
           <div className="grid grid-cols-3 gap-2 text-xs">
             <div className="text-center">
-              <div className="font-medium text-gray-900 dark:text-white">{stats.memorySize}</div>
-              <div className="text-gray-500">内存缓存</div>
+              <div className="font-medium text-text-primary dark:text-[#f5ece0]">{stats.memorySize}</div>
+              <div className="text-text-muted">内存缓存</div>
             </div>
             <div className="text-center">
-              <div className="font-medium text-gray-900 dark:text-white">{stats.localStorageSize}</div>
-              <div className="text-gray-500">本地存储</div>
+              <div className="font-medium text-text-primary dark:text-[#f5ece0]">{stats.localStorageSize}</div>
+              <div className="text-text-muted">本地存储</div>
             </div>
             <div className="text-center">
-              <div className="font-medium text-gray-900 dark:text-white">{stats.sessionStorageSize}</div>
-              <div className="text-gray-500">会话存储</div>
+              <div className="font-medium text-text-primary dark:text-[#f5ece0]">{stats.sessionStorageSize}</div>
+              <div className="text-text-muted">会话存储</div>
             </div>
           </div>
 
@@ -119,13 +125,21 @@ export const CacheManager: React.FC<CacheManagerProps> = ({ className = '' }) =>
           </div>
 
           {/* 缓存说明 */}
-          <div className="text-xs text-gray-500 space-y-1">
+          <div className="text-xs text-text-muted space-y-1">
             <p>• 缓存可以大幅提升页面加载速度</p>
             <p>• 数据更新时会自动清除相关缓存</p>
             <p>• 过期缓存会在后台自动更新</p>
           </div>
         </div>
       )}
+
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        message={confirmState.message}
+        type="danger"
+      />
     </div>
   );
 };

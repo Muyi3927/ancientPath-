@@ -65,6 +65,8 @@ export default function HymnsScreen() {
     return categories.filter(c => c.parentId === activeRoot.id);
   }, [categories, activeRoot]);
 
+  const getCategoryName = (id: number) => categories.find((c) => c.id === id)?.name || '';
+
   // Recursive function to get all descendant category IDs
   const getDescendantIds = useCallback((rootId: number, allCats: Category[]): number[] => {
       const fetchIds = (id: number): number[] => {
@@ -93,20 +95,23 @@ export default function HymnsScreen() {
 
   const renderPostItem = ({ item }: { item: BlogPost }) => (
     <Link href={`/post/${item.id}`} asChild>
-      <TouchableOpacity className="bg-white dark:bg-slate-900 p-3 mb-3 rounded-xl shadow-sm border border-slate-100 dark:border-slate-800 flex-row">
-        <View className="w-24 h-24 rounded-lg overflow-hidden mr-3">
-          <Image 
-              source={{ uri: HYMN_FIXED_COVER }} 
+      <TouchableOpacity className="bg-white dark:bg-[#1e1a14] p-3 mb-3 rounded-xl shadow-sm border border-border-light dark:border-[#302820] flex-row">
+        <View className="relative w-24 h-24 rounded-lg overflow-hidden mr-3">
+          <Image
+              source={{ uri: HYMN_FIXED_COVER }}
               style={{ width: '100%', height: '100%' }}
               contentFit="cover"
           />
+          <View className="absolute top-1 left-1 bg-primary-600/90 px-1.5 py-0.5 rounded shadow-sm">
+            <Text className="text-white text-[8px] font-bold">{getCategoryName(item.categoryId)}</Text>
+          </View>
         </View>
         <View className="flex-1 justify-center">
-          <Text className="text-base font-bold text-slate-900 dark:text-white mb-1" numberOfLines={2}>{item.title}</Text>
-          <Text className="text-slate-500 dark:text-slate-400 text-xs" numberOfLines={2}>{item.excerpt}</Text>
+          <Text className="text-base font-bold text-text-primary dark:text-[#f5ece0] mb-1" numberOfLines={2}>{item.title}</Text>
+          <Text className="text-text-secondary dark:text-[#d4c4b0] text-xs" numberOfLines={2}>{item.excerpt}</Text>
           <View className="flex-row items-center mt-2">
-             <Text className="text-blue-600 dark:text-blue-400 text-xs font-bold">查看曲谱</Text>
-             <IconSymbol name="chevron.right" size={12} color={isDark ? '#60a5fa' : '#2563eb'} />
+             <Text className="text-primary-600 dark:text-primary-400 text-xs font-bold">查看曲谱</Text>
+             <IconSymbol name="chevron.right" size={12} color={isDark ? '#f59e38' : '#e36208'} />
           </View>
         </View>
       </TouchableOpacity>
@@ -115,49 +120,49 @@ export default function HymnsScreen() {
 
   if (loadingCats) {
     return (
-      <View className="flex-1 items-center justify-center bg-white dark:bg-black">
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-white dark:bg-[#1e1a14]">
+        <ActivityIndicator size="large" color="#e36208" />
       </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }}>
+    <SafeAreaView className="flex-1 bg-warm-50 dark:bg-[#12100c]" style={{ paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 0) : 0 }}>
       {/* Top Tabs */}
-      <View className="flex-row h-12 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
-        <TouchableOpacity 
+      <View className="flex-row h-12 bg-white dark:bg-[#1e1a14] border-b border-border dark:border-[#4a3f30]">
+        <TouchableOpacity
             onPress={() => setActiveTab('metrical')}
-            className={`flex-1 items-center justify-center border-b-2 ${activeTab === 'metrical' ? 'border-blue-600' : 'border-transparent'}`}
+            className={`flex-1 items-center justify-center border-b-2 ${activeTab === 'metrical' ? 'border-primary-600' : 'border-transparent'}`}
         >
-            <Text className={`text-base ${activeTab === 'metrical' ? 'text-blue-600 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>韵律诗篇</Text>
+            <Text className={`text-base ${activeTab === 'metrical' ? 'text-primary-600 font-bold' : 'text-text-muted dark:text-[#a89880]'}`}>韵律诗篇</Text>
         </TouchableOpacity>
-        <TouchableOpacity 
+        <TouchableOpacity
             onPress={() => setActiveTab('hymns')}
-            className={`flex-1 items-center justify-center border-b-2 ${activeTab === 'hymns' ? 'border-blue-600' : 'border-transparent'}`}
+            className={`flex-1 items-center justify-center border-b-2 ${activeTab === 'hymns' ? 'border-primary-600' : 'border-transparent'}`}
         >
-            <Text className={`text-base ${activeTab === 'hymns' ? 'text-blue-600 font-bold' : 'text-gray-500 dark:text-gray-400'}`}>圣诗</Text>
+            <Text className={`text-base ${activeTab === 'hymns' ? 'text-primary-600 font-bold' : 'text-text-muted dark:text-[#a89880]'}`}>圣诗</Text>
         </TouchableOpacity>
       </View>
 
       <View className="flex-1 flex-row">
         {/* Left Sidebar */}
-        <View className="w-28 bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+        <View className="w-28 bg-warm-100 dark:bg-[#1a1610] border-r border-border dark:border-[#4a3f30]">
           <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 20 }}>
             {activeRoot && (
                 <TouchableOpacity
                     onPress={() => setSelectedSubCatId(null)}
-                    className={`p-3 border-l-4 ${selectedSubCatId === null ? 'bg-white dark:bg-black border-blue-600' : 'border-transparent'}`}
+                    className={`p-3 border-l-4 ${selectedSubCatId === null ? 'bg-white dark:bg-[#1e1a14] border-primary-600' : 'border-transparent'}`}
                 >
-                    <Text className={`text-sm ${selectedSubCatId === null ? 'text-blue-600 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>全部</Text>
+                    <Text className={`text-sm ${selectedSubCatId === null ? 'text-primary-600 font-bold' : 'text-text-secondary dark:text-[#d4c4b0]'}`}>全部</Text>
                 </TouchableOpacity>
             )}
             {subCategories.map(cat => (
               <TouchableOpacity
                 key={cat.id}
                 onPress={() => setSelectedSubCatId(cat.id)}
-                className={`p-3 border-l-4 ${selectedSubCatId === cat.id ? 'bg-white dark:bg-black border-blue-600' : 'border-transparent'}`}
+                className={`p-3 border-l-4 ${selectedSubCatId === cat.id ? 'bg-white dark:bg-[#1e1a14] border-primary-600' : 'border-transparent'}`}
               >
-                <Text className={`text-sm ${selectedSubCatId === cat.id ? 'text-blue-600 font-bold' : 'text-gray-600 dark:text-gray-400'}`}>
+                <Text className={`text-sm ${selectedSubCatId === cat.id ? 'text-primary-600 font-bold' : 'text-text-secondary dark:text-[#d4c4b0]'}`}>
                   {cat.name}
                 </Text>
               </TouchableOpacity>
@@ -166,14 +171,14 @@ export default function HymnsScreen() {
         </View>
 
         {/* Main Content */}
-        <View className="flex-1 bg-gray-50 dark:bg-black p-2">
+        <View className="flex-1 bg-warm-50 dark:bg-[#12100c] p-2">
           <FlatList
             data={filteredPosts}
             renderItem={renderPostItem}
             keyExtractor={(item) => item.id.toString()}
             ListEmptyComponent={
               <View className="items-center justify-center py-20">
-                <Text className="text-gray-400 dark:text-gray-500">该分类下暂无内容</Text>
+                <Text className="text-text-muted dark:text-[#a89880]">该分类下暂无内容</Text>
               </View>
             }
             contentContainerStyle={{ paddingBottom: 20 }}

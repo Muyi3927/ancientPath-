@@ -90,34 +90,34 @@ export const Hymns: React.FC = () => {
   const HYMN_FIXED_COVER = "https://media.ancientpath.dpdns.org/images/Hymns/hymncover.webp";
 
   return (
-    <div className="flex flex-col h-full bg-white dark:bg-gray-900">
+    <div className="flex flex-col h-full bg-white dark:bg-[#1e1a14]">
       {/* Top Tabs */}
-      <div className="h-14 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex-shrink-0 flex justify-center">
+      <div className="h-14 bg-white dark:bg-[#1e1a14] border-b border-border dark:border-[#4a3f30] flex-shrink-0 flex justify-center">
         <div className="flex h-full space-x-8 items-center">
             <button
               onClick={() => { setActiveTab('metrical'); }}
               className={`px-4 py-1 text-lg font-bold transition-colors relative ${
                 activeTab === 'metrical'
-                  ? 'text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  ? 'text-primary-600 dark:text-primary-400' 
+                  : 'text-text-muted dark:text-[#a89880] hover:text-text-primary dark:hover:text-[#f5ece0]'
               }`}
             >
               韵律诗篇
               {activeTab === 'metrical' && (
-                <div className="absolute bottom-[-13px] left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+                <div className="absolute bottom-[-13px] left-0 right-0 h-0.5 bg-primary-600 dark:bg-primary-400 rounded-full" />
               )}
             </button>
             <button
               onClick={() => { setActiveTab('hymns'); }}
               className={`px-4 py-1 text-lg font-bold transition-colors relative ${
                 activeTab === 'hymns'
-                  ? 'text-blue-600 dark:text-blue-400' 
-                  : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200'
+                  ? 'text-primary-600 dark:text-primary-400' 
+                  : 'text-text-muted dark:text-[#a89880] hover:text-text-primary dark:hover:text-[#f5ece0]'
               }`}
             >
               圣诗
               {activeTab === 'hymns' && (
-                <div className="absolute bottom-[-13px] left-0 right-0 h-0.5 bg-blue-600 dark:bg-blue-400 rounded-full" />
+                <div className="absolute bottom-[-13px] left-0 right-0 h-0.5 bg-primary-600 dark:bg-primary-400 rounded-full" />
               )}
             </button>
         </div>
@@ -125,10 +125,10 @@ export const Hymns: React.FC = () => {
 
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar: Subcategories */}
-        <div className="w-28 md:w-64 bg-gray-50 dark:bg-gray-800/50 border-r border-gray-200 dark:border-gray-700 overflow-y-auto flex-shrink-0">
+        <div className="w-28 md:w-64 bg-warm-50 dark:bg-[#252018]/50 border-r border-border dark:border-[#4a3f30] overflow-y-auto flex-shrink-0">
           <div className="p-1 md:p-2 pb-24 space-y-1">
             {!activeRoot && (
-                <div className="p-2 md:p-4 text-xs md:text-sm text-gray-500 text-center">
+                <div className="p-2 md:p-4 text-xs md:text-sm text-text-muted text-center">
                     请先在后台创建 "{activeTab === 'metrical' ? '韵律诗篇' : '圣诗'}" 分类
                 </div>
             )}
@@ -138,8 +138,8 @@ export const Hymns: React.FC = () => {
                     onClick={() => setSelectedSubCatId(null)}
                     className={`w-full text-left px-1.5 md:px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
                     selectedSubCatId === null 
-                        ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
-                        : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                        ? 'bg-white dark:bg-[#252018] text-primary-600 dark:text-primary-400 shadow-sm' 
+                        : 'text-text-secondary dark:text-[#d4c4b0] hover:bg-warm-100 dark:hover:bg-[#252018]'
                     }`}
                 >
                     全部
@@ -151,8 +151,8 @@ export const Hymns: React.FC = () => {
                 onClick={() => setSelectedSubCatId(cat.id)}
                 className={`w-full text-left px-1.5 md:px-3 py-2 rounded-lg text-xs md:text-sm font-medium transition-all ${
                   selectedSubCatId === cat.id 
-                    ? 'bg-white dark:bg-gray-700 text-blue-600 dark:text-blue-400 shadow-sm' 
-                    : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                    ? 'bg-white dark:bg-[#252018] text-primary-600 dark:text-primary-400 shadow-sm' 
+                    : 'text-text-secondary dark:text-[#d4c4b0] hover:bg-warm-100 dark:hover:bg-[#252018]'
                 }`}
               >
                 {cat.name}
@@ -162,7 +162,7 @@ export const Hymns: React.FC = () => {
         </div>
 
         {/* Right Content */}
-        <div className="flex-1 overflow-y-auto bg-white dark:bg-gray-900 p-2 md:p-8">
+        <div className="flex-1 overflow-y-auto bg-white dark:bg-[#1e1a14] p-2 md:p-8">
           <div className="max-w-4xl mx-auto">
             {filteredPosts.length > 0 ? (
               <div className="space-y-3 md:space-y-6">
@@ -170,7 +170,7 @@ export const Hymns: React.FC = () => {
                   <article key={post.id} className="group bg-white dark:bg-slate-900 rounded-xl md:rounded-2xl overflow-hidden border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-lg transition-all duration-300 flex flex-row">
                     <Link to={`/post/${post.id}`} className="block relative overflow-hidden w-24 md:w-1/3 h-24 md:h-40 flex-shrink-0">
                       <img src={HYMN_FIXED_COVER} alt={post.title} className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110" />
-                      <div className="hidden md:block absolute top-3 left-3 bg-black/50 backdrop-blur text-xs font-bold px-2 py-1 rounded text-white">
+                      <div className="absolute top-2 left-2 bg-primary-600/90 backdrop-blur text-[10px] md:text-xs font-bold px-1.5 md:px-2 py-0.5 md:py-1 rounded text-white">
                         {getCategoryName(post.categoryId)}
                       </div>
                     </Link>
@@ -206,7 +206,7 @@ export const Hymns: React.FC = () => {
                 ))}
               </div>
             ) : (
-              <div className="flex flex-col items-center justify-center py-20 text-gray-400 dark:text-gray-500">
+              <div className="flex flex-col items-center justify-center py-20 text-text-muted dark:text-[#a89880]">
                 <Music className="w-16 h-16 mb-4 opacity-20" />
                 <p>该分类下暂无内容</p>
                 <p className="text-xs mt-2">请在后台添加文章并发布到 "{activeRoot?.name || '对应分类'}" 的子分类中</p>

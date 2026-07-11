@@ -16,6 +16,51 @@ interface BibleVerseModalProps {
   onVersionChange?: (version: BibleVersionKey) => void;
 }
 
+// 只有一章的书卷——裸数字视为节号而非章号
+const SINGLE_CHAPTER_BOOKS = new Set([
+  31,  // 俄巴底亚书
+  57,  // 腓利门书
+  63,  // 约二
+  64,  // 约三
+  65,  // 犹大书
+])
+
+// 中文数字 → 阿拉伯数字
+const ZH_DIGIT_MAP: Record<string, number> = {
+  '〇': 0, '零': 0,
+  '一': 1, '二': 2, '三': 3, '四': 4, '五': 5,
+  '六': 6, '七': 7, '八': 8, '九': 9
+}
+
+function chineseToArabic(s: string): number {
+  let result = 0, current = 0
+  for (const ch of s) {
+    if (ch === '百') { result += (current || 1) * 100; current = 0 }
+    else if (ch === '十') { result += (current || 1) * 10; current = 0 }
+    else if (ch in ZH_DIGIT_MAP) { current = ZH_DIGIT_MAP[ch] }
+    else return NaN
+  }
+  const total = result + current
+  return total > 0 ? total : NaN
+}
+
+const ZH_NUM_RE = '(?:[一二三四五六七八九]?百[零〇]?(?:[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])?|[一二三四五六七八九]?十[一二三四五六七八九]?|[一二三四五六七八九])'
+
+/** 将章/节字符串中的中文数字和至/到统一为阿拉伯数字和 -（照抄 bible-refs.ts 的 normalizeCVStr） */
+function normalizeCVStr(s: string): string {
+  // 至/到 between numeral sequences → '-'
+  s = s.replace(
+    new RegExp(`(\\d+|${ZH_NUM_RE})\\s*[至到]\\s*(\\d+|${ZH_NUM_RE})`, 'g'),
+    (_, a, b) => `${a}-${b}`
+  )
+  // Chinese numerals → Arabic
+  s = s.replace(new RegExp(ZH_NUM_RE, 'g'), m => {
+    const n = chineseToArabic(m)
+    return isNaN(n) ? m : String(n)
+  })
+  return s
+}
+
 // 书卷简称到ID的映射
 const BOOK_NAME_MAP: Record<string, number> = {
   // 新约
@@ -193,52 +238,155 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
     }
   }, [passwordInput]);
 
-  // 解析经文引用，如 "太3:16"、"路1:3-6"、"创3"、"《传道书》4章 9 节"
+  // 解析经文引用，支持格式：
+  //   "太3:16"  "路1:3-6"  "太1:5-2:6"  "创3"  "犹12"
+  //   "太3：1-3,5,7"  "太3：1-3；5：6-7"
+  //   "《传道书》4章 9 节"  "第3章第16节"  "第3篇12节"
+  //   中文数字： "路一章三节" → 路1:3
+  //   单章书卷： "犹12" → 犹大书 1:12
+  //   分号分隔不同章/书，逗号分隔同章经节
   const parseReference = (ref: string): { bookId: number | null; chapter: number; endChapter: number; startVerse: number | null; endVerse: number | null } | null => {
-    // 移除括号与书名号
-    const cleanRef = ref.replace(/[《》【】\[\]()（）]/g, '').replace(/\s+/g, ' ').trim();
-    if (!cleanRef) return null;
+    // 移除括号与书名号，统一空白
+    let cleaned = ref.replace(/[《》【】\[\]()（）]/g, '').replace(/\s+/g, ' ').trim();
+    if (!cleaned) return null;
 
-    // 优先匹配：书卷 + 起始章:起始节-结束章:结束节
-    let match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)\s*-\s*(\d+)\s*[:：]\s*(\d+)$/);
-    if (match) {
-      const bookNamePart = match[1].trim();
-      const startChap = parseInt(match[2], 10);
-      const startVers = parseInt(match[3], 10);
-      const endChap = parseInt(match[4], 10);
-      const endVers = parseInt(match[5], 10);
-      const bookId = BOOK_NAME_MAP[bookNamePart];
-      if (!bookId) return null;
-      if (endChap < startChap) return null;
-      return { bookId, chapter: startChap, endChapter: endChap, startVerse: startVers, endVerse: endVers };
+    // 照抄 bible-refs.ts：分号分割，每个片段独立解析
+    const parts = cleaned.split(/[;；]/);
+    const sorted = Object.keys(BOOK_NAME_MAP).sort((a, b) => b.length - a.length);
+    let lastBookId = 0;
+    const allResults: Array<{ bookId: number; chapter: number; endChapter: number; startVerse: number | null; endVerse: number | null }> = [];
+
+    for (const part of parts) {
+      const trimmed = part.trim();
+      if (!trimmed) continue;
+
+      // 提取书卷名
+      let bookId = 0;
+      let rest = '';
+
+      for (let offset = 0; offset <= Math.min(trimmed.length, 20); offset++) {
+        const sub = trimmed.slice(offset);
+        for (const name of sorted) {
+          if (sub.startsWith(name)) {
+            const after = sub.slice(name.length).trim();
+            if (/^[\d第章一二三四五六七八九十百]/.test(after) || after === '') {
+              bookId = BOOK_NAME_MAP[name];
+              rest = after;
+              break;
+            }
+          }
+        }
+        if (bookId > 0) break;
+      }
+
+      if (bookId > 0) {
+        lastBookId = bookId;
+      } else if (lastBookId > 0) {
+        bookId = lastBookId;
+        rest = trimmed.replace(/[《》【】\[\]()（）]/g, '').trim();
+      } else {
+        continue;
+      }
+
+      // 将中文数字和 至/到 统一为阿拉伯数字和 -
+      rest = normalizeCVStr(rest)
+        .replace(/\s*[,，]\s*/g, ',')
+        .trim();
+
+      // 单章书卷：裸数字是节号而非章号
+      if (SINGLE_CHAPTER_BOOKS.has(bookId) && /^\d/.test(rest) && !rest.includes(':') && !rest.includes('：')) {
+        rest = '1:' + rest;
+      }
+
+      // 按空格分割，逐段解析
+      const spaceParts = rest.split(/\s+/);
+      let currentChapter = 0;
+      let lastWasColon = false;
+
+      for (const spacePart of spaceParts) {
+        if (!spacePart) continue;
+        const hasColonInPart = spacePart.includes(':') || spacePart.includes('：');
+        const commaParts = spacePart.split(',');
+
+        for (let i = 0; i < commaParts.length; i++) {
+          const seg = commaParts[i];
+          if (!seg) continue;
+          const hasColon = seg.includes(':') || seg.includes('：');
+
+          // 逗号后的裸数字视为当前章的节
+          if (!hasColon && currentChapter > 0 && (hasColonInPart || lastWasColon)) {
+            const rangeMatch = seg.match(/^(\d+)-(\d+)$/);
+            if (rangeMatch) {
+              allResults.push({ bookId, chapter: currentChapter, endChapter: currentChapter, startVerse: +rangeMatch[1], endVerse: +rangeMatch[2] });
+              lastWasColon = true;
+              continue;
+            }
+            const verseMatch = seg.match(/^(\d+)$/);
+            if (verseMatch) {
+              allResults.push({ bookId, chapter: currentChapter, endChapter: currentChapter, startVerse: +verseMatch[1], endVerse: +verseMatch[1] });
+              lastWasColon = true;
+              continue;
+            }
+          }
+
+          let cv = parseChapterVerse(seg);
+          if (cv) {
+            currentChapter = cv.endChapter;
+            allResults.push({ bookId, ...cv });
+          }
+          lastWasColon = hasColon;
+        }
+      }
     }
 
-    // 优先匹配：书卷 + 章:节(-节)
-    match = cleanRef.match(/^([^:0-9]+?)\s*(\d+)\s*[:：]\s*(\d+)(?:\s*-\s*(\d+))?$/);
-    if (match) {
-      const bookNamePart = match[1].trim();
-      const chap = parseInt(match[2], 10);
-      const startVers = parseInt(match[3], 10);
-      const endVers = match[4] ? parseInt(match[4], 10) : startVers;
-      const bookId = BOOK_NAME_MAP[bookNamePart];
-      if (!bookId) return null;
-      return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
-    }
+    if (allResults.length === 0) return null;
 
-    // 匹配：书卷 + 章(第)? + 节(第)?，节可选
-    match = cleanRef.match(/^([^:0-9]+?)\s*第?\s*(\d+)\s*(?:章)?\s*(?:第?\s*(\d+)\s*(?:节)?)?\s*(?:-\s*(\d+)\s*节?)?$/);
-    if (!match) return null;
-
-    const bookNamePart = match[1].trim();
-    const chap = parseInt(match[2], 10);
-    const startVers = match[3] ? parseInt(match[3], 10) : null;
-    const endVers = match[4] ? parseInt(match[4], 10) : startVers;
-
-    const bookId = BOOK_NAME_MAP[bookNamePart];
-    if (!bookId) return null;
-
-    return { bookId, chapter: chap, endChapter: chap, startVerse: startVers, endVerse: endVers };
+    const first = allResults[0];
+    const last = allResults[allResults.length - 1];
+    return {
+      bookId: lastBookId,
+      chapter: first.chapter,
+      endChapter: last.endChapter,
+      startVerse: first.startVerse,
+      endVerse: last.endVerse,
+    };
   };
+
+  // 照抄 bible-refs.ts 的 parseChapterVerse
+  function parseChapterVerse(s: string): { chapter: number; endChapter: number; startVerse: number | null; endVerse: number | null } | null {
+    // Normalize Chinese numerals and 至/到 first so all patterns below only handle Arabic digits
+    const clean = normalizeCVStr(s.replace(/\s+/g, ' ').trim())
+
+    // cross-chapter: "1:5-2:6" or "1：5-2：6"
+    let m = clean.match(/^(\d+)\s*[:：]\s*(\d+)\s*[-–—]\s*(\d+)\s*[:：]\s*(\d+)$/)
+    if (m) return { chapter: +m[1], endChapter: +m[3], startVerse: +m[2], endVerse: +m[4] }
+
+    // same-chapter range: "14:7-9"
+    m = clean.match(/^(\d+)\s*[:：]\s*(\d+)\s*[-–—]\s*(\d+)$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: +m[2], endVerse: +m[3] }
+
+    // single verse: "14:7"
+    m = clean.match(/^(\d+)\s*[:：]\s*(\d+)$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: +m[2], endVerse: +m[2] }
+
+    // Chinese format: "第14章7-9节" or "14章7-9节"
+    m = clean.match(/^第?\s*(\d+)\s*[章篇]\s*第?\s*(\d+)\s*[-–—]\s*(\d+)\s*节?$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: +m[2], endVerse: +m[3] }
+
+    // Chinese format: "第14章第7节" or "14章7节"
+    m = clean.match(/^第?\s*(\d+)\s*[章篇]\s*第?\s*(\d+)\s*节?$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: +m[2], endVerse: +m[2] }
+
+    // Chinese format: "第14章" (whole chapter)
+    m = clean.match(/^第?\s*(\d+)\s*[章篇]$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: null, endVerse: null }
+
+    // chapter only: "14"
+    m = clean.match(/^(\d+)$/)
+    if (m) return { chapter: +m[1], endChapter: +m[1], startVerse: null, endVerse: null }
+
+    return null
+  }
 
   // 加载经文
   useEffect(() => {
@@ -438,12 +586,9 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
                   setShowVersionPicker(false);
                   setShowFontSizePicker(prev => !prev);
                 }}
-                className={`flex-row items-center gap-1 px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} border`}
+                className={`p-1.5 rounded-lg border ${showFontSizePicker ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700' : 'bg-white dark:bg-[#252018] border-border dark:border-[#4a3f30]'}`}
               >
-                <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
-                  {(fontSizeScale * 100).toFixed(0)}%
-                </Text>
-                <IconSymbol name="textformat.size" size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <IconSymbol name="textformat.size" size={16} color={showFontSizePicker ? (isDark ? '#f59e38' : '#e36208') : (isDark ? '#d4c4b0' : '#6d5c4a')} />
               </TouchableOpacity>
 
               {/* Version Picker */}
@@ -452,12 +597,12 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
                   setShowFontSizePicker(false);
                   setShowVersionPicker(!showVersionPicker);
                 }}
-                className={`flex-row items-center gap-1 px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-700 border-gray-600' : 'bg-gray-100 border-gray-300'} border`}
+                className={`flex-row items-center gap-1 px-3 py-1.5 rounded-lg border ${showVersionPicker ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700' : 'bg-white dark:bg-[#252018] border-border dark:border-[#4a3f30]'}`}
               >
-                <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>
+                <Text className={`text-sm ${showVersionPicker ? 'text-primary-600 dark:text-primary-400' : 'text-text-secondary dark:text-[#d4c4b0]'}`}>
                   {currentVersionLabel}
                 </Text>
-                <IconSymbol name="chevron.down" size={12} color={isDark ? '#9ca3af' : '#6b7280'} />
+                <IconSymbol name="chevron.down" size={12} color={showVersionPicker ? (isDark ? '#f59e38' : '#e36208') : (isDark ? '#d4c4b0' : '#6d5c4a')} />
               </TouchableOpacity>
               
               <TouchableOpacity 
@@ -471,31 +616,31 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
 
           {/* Font Size Picker */}
           {showFontSizePicker && (
-            <View className={`px-4 py-2 border-b ${isDark ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
+            <View className="px-4 py-2 border-b border-border dark:border-[#4a3f30] bg-warm-50 dark:bg-[#252018]/60">
               <View className="flex-row items-center justify-between mb-2">
-                <Text className={`text-sm ${isDark ? 'text-gray-200' : 'text-gray-700'}`}>字体大小</Text>
-                <Text className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>{(fontSizeScale * 100).toFixed(0)}%</Text>
+                <Text className="text-sm text-text-secondary dark:text-[#d4c4b0]">字体大小</Text>
+                <Text className="text-sm text-text-muted dark:text-[#a89880]">{(fontSizeScale * 100).toFixed(0)}%</Text>
               </View>
               <View className="flex-row items-center justify-between">
                 <TouchableOpacity
                   onPress={() => changeFontSize(-0.1)}
-                  className={`px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-gray-200'}`}
+                  className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30]"
                 >
-                  <Text className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}>A-</Text>
+                  <Text className="text-text-primary dark:text-[#f5ece0] text-xs font-semibold">A-</Text>
                 </TouchableOpacity>
 
                 <Text
                   style={{ fontSize: verseFontSize }}
-                  className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}
+                  className="text-text-primary dark:text-[#f5ece0] font-semibold"
                 >
                   预览经文
                 </Text>
 
                 <TouchableOpacity
                   onPress={() => changeFontSize(0.1)}
-                  className={`px-3 py-1.5 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-gray-200'}`}
+                  className="flex-row items-center gap-1 px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30]"
                 >
-                  <Text className={`${isDark ? 'text-gray-100' : 'text-gray-800'} font-semibold`}>A+</Text>
+                  <Text className="text-text-primary dark:text-[#f5ece0] text-xs font-semibold">A+</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -503,7 +648,7 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
 
           {/* Version Picker Dropdown */}
           {showVersionPicker && (
-            <View className={`px-4 py-2 border-b ${isDark ? 'border-gray-700 bg-gray-700' : 'border-gray-200 bg-gray-50'}`}>
+            <View className="px-4 py-2 border-b border-border dark:border-[#4a3f30] bg-warm-50 dark:bg-[#252018]/60">
               {availableVersions.map((v) => (
                 <TouchableOpacity
                   key={v.key}
@@ -511,9 +656,9 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
                     onVersionChange?.(v.key);
                     setShowVersionPicker(false);
                   }}
-                  className={`py-2 px-3 rounded-lg mb-1 ${version === v.key ? (isDark ? 'bg-blue-600' : 'bg-blue-500') : ''}`}
+                  className={`py-2.5 px-4 rounded-xl mb-1 flex-row items-center justify-between ${version === v.key ? 'bg-primary-600' : 'bg-white dark:bg-[#1e1a14] border border-border dark:border-[#4a3f30]'}`}
                 >
-                  <Text className={`text-sm ${version === v.key ? 'text-white font-semibold' : (isDark ? 'text-gray-200' : 'text-gray-700')}`}>
+                  <Text className={`text-sm ${version === v.key ? 'text-white font-semibold' : 'text-text-primary dark:text-[#f5ece0]'}`}>
                     {v.label}
                   </Text>
                 </TouchableOpacity>
@@ -524,9 +669,9 @@ const BibleVerseModal = React.memo<BibleVerseModalProps>(({
                     setShowVersionPicker(false);
                     setShowPasswordModal(true);
                   }}
-                  className={`py-2 px-3 rounded-lg ${isDark ? 'bg-gray-600' : 'bg-gray-200'}`}
+                  className="py-2.5 px-4 rounded-xl bg-warm-100 dark:bg-[#252018] border border-border dark:border-[#4a3f30]"
                 >
-                  <Text className={`text-sm ${isDark ? 'text-gray-300' : 'text-gray-600'}`}>
+                  <Text className="text-sm text-text-muted dark:text-[#a89880]">
                     🔒 解锁新译本
                   </Text>
                 </TouchableOpacity>
