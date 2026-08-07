@@ -1,11 +1,13 @@
 import React, { useState, useContext, useEffect, useMemo, useRef } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AuthContext } from '../App';
 import { BlogPost, Category } from '../types';
-import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles } from 'lucide-react';
+import { Save, Eye, Edit3, X, ArrowLeft, Tag as TagIcon, Image as ImageIcon, Star, Mic, Trash2, Settings, Upload, Loader2, ChevronUp, ChevronDown, Sparkles, Bold, Italic, Heading, Quote, Link as LinkIcon, Type, Palette, Minimize, Minus, AlignLeft, AlignCenter, AlignRight, Home, FileText } from 'lucide-react';
 import MarkdownRenderer from '../components/MarkdownRenderer';
+import { AlertModal, ConfirmModal, PromptModal } from '../components/AlertDialog';
 import { getPosts, getPostById, getCategories, createPost, updatePost, deletePost, createCategory, deleteCategory, uploadFile } from '../services/api';
 import { generateSummary } from '../services/aiService';
+import { compressImage } from '../services/imageOptimizer';
 
 interface EditorProps {
   onSave: (post: BlogPost) => void;
@@ -16,11 +18,24 @@ interface EditorProps {
   onRefresh: () => Promise<void>;
 }
 
+const PRESET_COLORS = [
+    { color: '#ef4444', name: '红色' },
+    { color: '#f97316', name: '橙色' },
+    { color: '#eab308', name: '黄色' },
+    { color: '#22c55e', name: '绿色' },
+    { color: '#3b82f6', name: '蓝色' },
+    { color: '#a855f7', name: '紫色' },
+    { color: '#64748b', name: '灰色' },
+    { color: '#000000', name: '黑色' },
+];
+
 export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategory, onDeleteCategory, posts, onRefresh }) => {
   const navigate = useNavigate();
   const { id: idString } = useParams<{ id: string }>();
   const id = idString ? Number(idString) : undefined;
   const { user, isAdmin } = useContext(AuthContext);
+  const location = useLocation();
+  const draftState = location.state as { draft?: any };
   
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -32,14 +47,27 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   const [coverImage, setCoverImage] = useState('');
   const [audioUrl, setAudioUrl] = useState('');
   const [isFeatured, setIsFeatured] = useState(false);
+  const [showOnHomepage, setShowOnHomepage] = useState(true);
   const [isMetaCollapsed, setIsMetaCollapsed] = useState(false);
 
   const [previewMode, setPreviewMode] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+    const [uploadingPdf, setUploadingPdf] = useState(false);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
+
+  // Dialog states
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
+  const [confirmState, setConfirmState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'danger' | 'warning' | 'info'; onConfirm: () => void }>({ isOpen: false, message: '', onConfirm: () => {} });
+  const [promptState, setPromptState] = useState<{ isOpen: boolean; title?: string; message?: string; placeholder?: string; defaultValue?: string; onConfirm: (val: string) => void }>({ isOpen: false, onConfirm: () => {} });
+  const [showColorPicker, setShowColorPicker] = useState(false);
+  const [showHeadingPicker, setShowHeadingPicker] = useState(false);
   
+  // Draft State
+  const [lastDraftSave, setLastDraftSave] = useState<string | null>(null);
+  const [isDraftSaving, setIsDraftSaving] = useState(false);
+
   // Category Creation/Management State
   const [isManagingCategory, setIsManagingCategory] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState('');
@@ -53,6 +81,9 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   // Refs for file inputs
   const imageInputRef = useRef<HTMLInputElement>(null);
   const audioInputRef = useRef<HTMLInputElement>(null);
+  const contentImageInputRef = useRef<HTMLInputElement>(null);
+    const contentPdfInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const suggestedTags = useMemo(() => {
     const allTags = new Set<string>();
@@ -68,16 +99,31 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   }, [posts]);
 
   useEffect(() => {
-    if (id && posts.length > 0) {
+    if (draftState?.draft) {
+        const d = draftState.draft;
+        setTitle(d.title);
+        setContent(d.content);
+        setExcerpt(d.excerpt);
+        setCategoryId(d.categoryId);
+        if (Array.isArray(d.currentTags)) {
+             setCurrentTags(d.currentTags.filter((t: string) => t !== '__draft__'));
+        }
+        setCoverImage(d.coverImage);
+        setAudioUrl(d.audioUrl);
+        setIsFeatured(d.isFeatured);
+        // Clear history state to prevent reloading draft on refresh/back if desired, 
+        // but keeping it is fine.
+    } else if (id && posts.length > 0) {
       const post = posts.find(p => p.id === id);
       if (post) {
         setTitle(post.title);
         setContent(post.content);
         setExcerpt(post.excerpt);
         setCategoryId(post.categoryId);
-        setCurrentTags(post.tags);
+        setCurrentTags(post.tags.filter(t => t !== '__draft__'));
         setCoverImage(post.coverImage);
         setIsFeatured(post.isFeatured || false);
+        setShowOnHomepage(post.showOnHomepage !== false);
         setAudioUrl(post.audioUrl || '');
       }
     } else {
@@ -92,52 +138,153 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
     return <div className="text-center py-20 text-red-500 font-bold">拒绝访问。仅限管理员。</div>;
   }
 
+  // Markdown Helper
+  const insertMarkdown = (prefix: string, suffix: string = '') => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const scrollTop = textarea.scrollTop;
+    const text = textarea.value;
+    const before = text.substring(0, start);
+    const selection = text.substring(start, end);
+    const after = text.substring(end);
+
+    const newText = before + prefix + selection + suffix + after;
+    setContent(newText);
+    
+    // Restore focus, selection and scroll position
+    setTimeout(() => {
+        textarea.focus();
+        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
+        textarea.scrollTop = scrollTop;
+    }, 0);
+  };
+
+  const handleColorClick = (color: string) => {
+    insertMarkdown(`<span style="color: ${color}">`, '</span>');
+    setShowColorPicker(false);
+  };
+
+  const handleContentImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+        let fileToUpload = file;
+        try {
+            fileToUpload = await compressImage(file);
+        } catch (e) {
+            console.error("Content image compression failed, using original", e);
+        }
+
+        const publicUrl = await uploadFile(fileToUpload);
+        insertMarkdown(`![图片描述](${publicUrl})`);
+    } catch (e) {
+        setAlertState({ isOpen: true, message: "图片上传失败", type: "error" });
+        console.error(e);
+    } finally {
+        e.target.value = '';
+    }
+  };
+
+    const escapeHtmlAttribute = (value: string) => {
+        return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    };
+
+    const insertPdfBlock = (pdfUrl: string) => {
+        const safeUrl = escapeHtmlAttribute(pdfUrl.trim());
+        if (!safeUrl) return;
+
+        insertMarkdown(
+            `\n<div class=\"pdf-embed\">\n<embed src=\"${safeUrl}\" type=\"application/pdf\">\n</div>\n`
+        );
+    };
+
+    const handleContentPdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        setUploadingPdf(true);
+        try {
+            const publicUrl = await uploadFile(file);
+            insertPdfBlock(publicUrl);
+        } catch (err) {
+            console.error(err);
+            setAlertState({ isOpen: true, message: "PDF 上传失败", type: "error" });
+        } finally {
+            setUploadingPdf(false);
+            e.target.value = '';
+        }
+    };
+
+    const handleInsertPdfByUrl = () => {
+        setPromptState({
+            isOpen: true,
+            title: '插入 PDF',
+            message: '请输入 PDF 链接',
+            placeholder: 'https://...',
+            onConfirm: (val) => {
+                if (val) insertPdfBlock(val);
+            }
+        });
+    };
+
   // Tag Management Functions
   const handleRenameTag = async (oldTag: string) => {
       const newTag = newTagName.trim();
       if (!newTag || newTag === oldTag) return;
-      
-      if (!window.confirm(`确定将所有文章中的标签 "${oldTag}" 修改为 "${newTag}" 吗？`)) return;
 
-      const affectedPosts = posts.filter(p => p.tags.includes(oldTag));
-      setIsSubmitting(true);
-      try {
-          await Promise.all(affectedPosts.map(p => {
-              const newTags = p.tags.map(t => t === oldTag ? newTag : t);
-              // Remove duplicates if newTag already existed
-              const uniqueTags = Array.from(new Set(newTags));
-              return updatePost(p.id, { tags: uniqueTags });
-          }));
-          await onRefresh();
-          setEditingTag(null);
-          setNewTagName('');
-          alert(`已更新 ${affectedPosts.length} 篇文章的标签。`);
-      } catch (e) {
-          console.error(e);
-          alert('更新标签失败');
-      } finally {
-          setIsSubmitting(false);
-      }
+      setConfirmState({
+        isOpen: true,
+        message: `确定将所有文章中的标签 "${oldTag}" 修改为 "${newTag}" 吗？`,
+        onConfirm: async () => {
+          const affectedPosts = posts.filter(p => p.tags.includes(oldTag));
+          setIsSubmitting(true);
+          try {
+              await Promise.all(affectedPosts.map(p => {
+                  const newTags = p.tags.map(t => t === oldTag ? newTag : t);
+                  const uniqueTags = Array.from(new Set(newTags));
+                  return updatePost(p.id, { tags: uniqueTags });
+              }));
+              await onRefresh();
+              setEditingTag(null);
+              setNewTagName('');
+              setAlertState({ isOpen: true, message: `已更新 ${affectedPosts.length} 篇文章的标签。`, type: "success" });
+          } catch (e) {
+              console.error(e);
+              setAlertState({ isOpen: true, message: "更新标签失败", type: "error" });
+          } finally {
+              setIsSubmitting(false);
+          }
+        }
+      });
   };
 
   const handleDeleteTagGlobal = async (tag: string) => {
-      if (!window.confirm(`确定要删除标签 "${tag}" 吗？这将从所有包含该标签的文章中移除它。`)) return;
-      
-      const affectedPosts = posts.filter(p => p.tags.includes(tag));
-      setIsSubmitting(true);
-      try {
-          await Promise.all(affectedPosts.map(p => {
-              const newTags = p.tags.filter(t => t !== tag);
-              return updatePost(p.id, { tags: newTags });
-          }));
-          await onRefresh();
-          alert(`已从 ${affectedPosts.length} 篇文章中移除标签 "${tag}"。`);
-      } catch (e) {
-          console.error(e);
-          alert('删除标签失败');
-      } finally {
-          setIsSubmitting(false);
-      }
+      setConfirmState({
+        isOpen: true,
+        message: `确定要删除标签 "${tag}" 吗？这将从所有包含该标签的文章中移除它。`,
+        onConfirm: async () => {
+          const affectedPosts = posts.filter(p => p.tags.includes(tag));
+          setIsSubmitting(true);
+          try {
+              await Promise.all(affectedPosts.map(p => {
+                  const newTags = p.tags.filter(t => t !== tag);
+                  return updatePost(p.id, { tags: newTags });
+              }));
+              await onRefresh();
+              setAlertState({ isOpen: true, message: `已从 ${affectedPosts.length} 篇文章中移除标签 "${tag}"。`, type: "success" });
+          } catch (e) {
+              console.error(e);
+              setAlertState({ isOpen: true, message: "删除标签失败", type: "error" });
+          } finally {
+              setIsSubmitting(false);
+          }
+        },
+        type: 'danger'
+      });
   };
 
   // Drag and Drop State
@@ -171,13 +318,23 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       if (type === 'image') setUploadingImage(true);
       else setUploadingAudio(true);
 
-      const publicUrl = await uploadFile(file);
+      let fileToUpload = file;
+      if (type === 'image') {
+         try {
+             fileToUpload = await compressImage(file);
+         } catch (optErr) {
+             console.error("图片压缩失败，将使用原图上传:", optErr);
+             // 继续上传原图
+         }
+      }
+
+      const publicUrl = await uploadFile(fileToUpload);
 
       if (type === 'image') setCoverImage(publicUrl);
       else setAudioUrl(publicUrl);
 
     } catch (error) {
-      alert(`上传失败: ${error instanceof Error ? error.message : '未知错误'}`);
+      setAlertState({ isOpen: true, message: `上传失败: ${error instanceof Error ? error.message : "未知错误"}`, type: "error" });
       console.error(error);
     } finally {
       if (type === 'image') setUploadingImage(false);
@@ -206,23 +363,39 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   };
 
   const handleGenerateSummary = async () => {
-    if (!content) return alert("请先输入文章内容");
+    if (!content) return setAlertState({ isOpen: true, message: "请先输入文章内容", type: "warning" });
     setIsGeneratingSummary(true);
     try {
       const summary = await generateSummary(content);
       setExcerpt(summary);
     } catch (e) {
-      alert("生成摘要失败");
+      setAlertState({ isOpen: true, message: "生成摘要失败", type: "error" });
     } finally {
       setIsGeneratingSummary(false);
     }
   };
 
-  const handleSave = async () => {
-    if (!title || !content || categoryId === undefined) return alert("标题、内容和分类不能为空");
+  const handleSavePost = async (forceDraft: boolean = false) => {
+    if (!title || !content) return setAlertState({ isOpen: true, message: "标题和内容不能为空", type: "warning" });
     
-    setIsSubmitting(true);
-    const finalCoverImage = coverImage || `https://picsum.photos/800/400?random=${Math.floor(Math.random()*100)}`;
+    // Drafts might not have a category set yet. Default to 0 or first category if available.
+    const finalCategoryId = categoryId !== undefined ? categoryId : (categories.length > 0 ? categories[0].id : 0);
+    
+    if (forceDraft) setIsDraftSaving(true);
+    else setIsSubmitting(true);
+    
+    // Prepare tags: Clean existing __draft__ tag then re-evaluate
+    const tagsToSave = currentTags.filter(t => t !== '__draft__');
+    
+    // If saving as draft, add the tag.
+    // If publishing (forceDraft=false), we DO NOT add the tag, meaning it's published.
+    // The previous isPublished state is removed; publishing is direct.
+    if (forceDraft) {
+        tagsToSave.push('__draft__');
+    }
+
+    // User requested no automatic random image.
+    const finalCoverImage = coverImage;
     const finalExcerpt = excerpt.trim() || (content.substring(0, 100) + '...');
 
     const postData = {
@@ -230,30 +403,43 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
       excerpt: finalExcerpt,
       content,
       coverImage: finalCoverImage,
-      categoryId: categoryId,
-      tags: currentTags,
-      isFeatured,
+      categoryId: finalCategoryId,
+      tags: tagsToSave,
+      isFeatured: isFeatured && !forceDraft, // Only featured if published (not draft)
+      showOnHomepage: showOnHomepage, // Keeps user preference
       audioUrl
     };
 
     try {
+       let savedPostId = id;
        if (id) {
          await updatePost(id, postData);
        } else {
-         await createPost(postData);
+         const newPost = await createPost(postData);
+         savedPostId = newPost.id;
        }
        
-       // Refresh data from server to ensure consistency
        await onRefresh();
        
-       navigate('/');
+       if (forceDraft) {
+           setAlertState({ isOpen: true, message: '已保存到云端草稿箱！', type: 'success' });
+           if (!id && savedPostId) {
+               navigate(`/editor/${savedPostId}`, { replace: true });
+           }
+       } else {
+           navigate('/');
+       }
     } catch (e) {
        console.error("保存失败", e);
-       alert(`保存失败: ${e instanceof Error ? e.message : '未知错误'}`);
+       setAlertState({ isOpen: true, message: `保存失败: ${e instanceof Error ? e.message : "未知错误"}`, type: "error" });
     } finally {
       setIsSubmitting(false);
+      setIsDraftSaving(false);
     }
   };
+
+  const handleSaveDraft = () => handleSavePost(true);
+  const handleSave = () => handleSavePost(false);
 
   const handleAddCategory = () => {
     if (newCategoryName.trim()) {
@@ -270,9 +456,9 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
   };
 
   return (
-    <div className="h-[calc(100vh-120px)] flex flex-col">
+    <div className="h-full flex flex-col p-4">
       {/* Header Controls */}
-      <div className="flex justify-between items-center mb-4">
+      <div className="flex justify-between items-center mb-4 flex-none">
         <div className="flex items-center gap-4">
             <button onClick={() => navigate(-1)} className="p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500 transition-colors">
                 <ArrowLeft className="w-5 h-5" />
@@ -285,6 +471,14 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             className="px-4 py-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700 flex items-center text-sm font-medium transition-colors"
            >
              {previewMode ? <><Edit3 className="w-4 h-4 mr-2"/> 编辑</> : <><Eye className="w-4 h-4 mr-2"/> 预览</>}
+           </button>
+           <button 
+            onClick={handleSaveDraft}
+            disabled={isDraftSaving}
+            className="px-4 py-2 rounded-full bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 hover:bg-amber-200 dark:hover:bg-amber-800 flex items-center text-sm font-bold transition-colors"
+           >
+             {isDraftSaving ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Save className="w-4 h-4 mr-2" />}
+             存云端草稿
            </button>
            <button 
             onClick={handleSave}
@@ -313,9 +507,17 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
                         onChange={e => setTitle(e.target.value)}
                         className="flex-grow bg-transparent text-2xl font-serif font-bold focus:outline-none placeholder-slate-300 dark:placeholder-slate-600"
                     />
+                    
+                    <button 
+                        onClick={() => setShowOnHomepage(!showOnHomepage)}
+                        className={`p-2 rounded-full transition-all ${showOnHomepage ? 'bg-primary-100 text-primary-500' : 'bg-warm-100 text-text-muted'}`}
+                        title={showOnHomepage ? "从首页隐藏" : "显示在首页"}
+                    >
+                        <Home className={`w-5 h-5 ${showOnHomepage ? 'fill-current' : ''}`} />
+                    </button>
                     <button 
                         onClick={() => setIsFeatured(!isFeatured)}
-                        className={`p-2 rounded-full transition-all ${isFeatured ? 'bg-yellow-100 text-yellow-500' : 'bg-slate-100 text-slate-400'}`}
+                        className={`p-2 rounded-full transition-all ${isFeatured ? 'bg-yellow-100 text-yellow-500' : 'bg-warm-100 text-text-muted'}`}
                         title={isFeatured ? "取消精选" : "设为精选"}
                     >
                         <Star className={`w-5 h-5 ${isFeatured ? 'fill-current' : ''}`} />
@@ -575,12 +777,131 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             </div>
 
             {/* Markdown Area */}
-            <div className="flex-grow p-1">
+            <div className="flex-grow flex flex-col bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+                {/* Toolbar */}
+                <div className="flex items-center gap-1 p-2 border-b border-slate-100 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 relative">
+                    <button onClick={() => insertMarkdown('**', '**')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="加粗">
+                        <Bold className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('*', '*')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="斜体">
+                        <Italic className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<small>', '</small>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="小字">
+                        <Minimize className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowHeadingPicker(!showHeadingPicker)} 
+                            className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 ${showHeadingPicker ? 'bg-slate-200 dark:bg-slate-800 text-primary-600' : 'text-slate-600 dark:text-slate-400'}`} 
+                            title="标题级别"
+                        >
+                            <Heading className="w-4 h-4" />
+                        </button>
+                        {showHeadingPicker && (
+                            <div className="absolute top-full left-0 mt-2 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 flex flex-col w-40 p-1 max-h-60 overflow-y-auto">
+                                {[1, 2, 3, 4, 5, 6].map(level => (
+                                    <button
+                                        key={level}
+                                        onClick={() => {
+                                            insertMarkdown('#'.repeat(level) + ' ');
+                                            setShowHeadingPicker(false);
+                                        }}
+                                        className="text-left px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 rounded flex items-center gap-2"
+                                    >
+                                        <span className="font-mono text-xs opacity-50 text-slate-400">{'#'.repeat(level)}</span>
+                                        <span className={`${level === 1 ? 'text-lg font-bold' : level === 2 ? 'text-base font-bold' : 'text-sm'}`}>标题 {level}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                    <button onClick={() => insertMarkdown('> ')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="引用">
+                        <Quote className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('[', '](url "描述")')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="链接">
+                        <LinkIcon className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('\n---\n')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="分割线">
+                        <Minus className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    <button onClick={() => insertMarkdown('<div style="text-align: left">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="左对齐">
+                        <AlignLeft className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<div style="text-align: center">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="居中对齐">
+                        <AlignCenter className="w-4 h-4" />
+                    </button>
+                    <button onClick={() => insertMarkdown('<div style="text-align: right">\n\n', '\n\n</div>')} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="右对齐">
+                        <AlignRight className="w-4 h-4" />
+                    </button>
+                    <div className="w-px h-4 bg-slate-300 dark:bg-slate-700 mx-1"></div>
+                    
+                    <div className="relative">
+                        <button 
+                            onClick={() => setShowColorPicker(!showColorPicker)} 
+                            className={`p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 ${showColorPicker ? 'bg-slate-200 dark:bg-slate-800 text-primary-600' : 'text-slate-600 dark:text-slate-400'}`} 
+                            title="字体颜色"
+                        >
+                            <Palette className="w-4 h-4" />
+                        </button>
+                        
+                        {/* Color Picker Popup */}
+                        {showColorPicker && (
+                            <div className="absolute top-full left-0 mt-2 p-2 bg-white dark:bg-slate-800 rounded-lg shadow-xl border border-slate-200 dark:border-slate-700 z-50 grid grid-cols-4 gap-2 w-48">
+                                {PRESET_COLORS.map((c) => (
+                                    <button
+                                        key={c.color}
+                                        onClick={() => handleColorClick(c.color)}
+                                        className="w-8 h-8 rounded-full border border-slate-200 dark:border-slate-600 hover:scale-110 transition-transform"
+                                        style={{ backgroundColor: c.color }}
+                                        title={c.name}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    <button onClick={() => contentImageInputRef.current?.click()} className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400" title="插入图片">
+                        <ImageIcon className="w-4 h-4" />
+                    </button>
+                    <input 
+                        type="file" 
+                        ref={contentImageInputRef} 
+                        className="hidden" 
+                        accept="image/*" 
+                        onChange={handleContentImageUpload} 
+                    />
+                    <button
+                        onClick={handleInsertPdfByUrl}
+                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400"
+                        title="插入 PDF 链接"
+                    >
+                        <FileText className="w-4 h-4" />
+                    </button>
+                    <button
+                        onClick={() => contentPdfInputRef.current?.click()}
+                        disabled={uploadingPdf}
+                        className="p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 disabled:opacity-50"
+                        title="上传并插入 PDF"
+                    >
+                        {uploadingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                    </button>
+                    <input
+                        type="file"
+                        ref={contentPdfInputRef}
+                        className="hidden"
+                        accept="application/pdf,.pdf"
+                        onChange={handleContentPdfUpload}
+                    />
+                </div>
+                
                 <textarea 
+                    ref={textareaRef}
                     value={content}
                     onChange={e => setContent(e.target.value)}
                     placeholder="使用 Markdown 开始写作..."
-                    className="w-full h-full bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-primary-500 outline-none resize-none font-mono text-sm leading-relaxed"
+                    className="w-full flex-grow p-6 focus:outline-none resize-none font-mono text-sm leading-relaxed bg-transparent"
                 />
             </div>
         </div>
@@ -607,6 +928,32 @@ export const Editor: React.FC<EditorProps> = ({ onSave, categories, onAddCategor
             <MarkdownRenderer content={content || '*预览内容将显示在这里...*'} />
         </div>
       </div>
+
+      {/* Dialogs */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+      />
+      <ConfirmModal
+        isOpen={confirmState.isOpen}
+        onClose={() => setConfirmState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={confirmState.onConfirm}
+        title={confirmState.title}
+        message={confirmState.message}
+        type={confirmState.type}
+      />
+      <PromptModal
+        isOpen={promptState.isOpen}
+        onClose={() => setPromptState(prev => ({ ...prev, isOpen: false }))}
+        onConfirm={promptState.onConfirm}
+        title={promptState.title}
+        message={promptState.message}
+        placeholder={promptState.placeholder}
+        defaultValue={promptState.defaultValue}
+      />
     </div>
   );
 };

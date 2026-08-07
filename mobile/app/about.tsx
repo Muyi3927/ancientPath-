@@ -1,14 +1,33 @@
-import React from 'react';
-import { View, Text, ScrollView, useColorScheme, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, useColorScheme, TouchableOpacity, useWindowDimensions, Alert, ActivityIndicator } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import Markdown from 'react-native-markdown-display';
+import RenderHtml from 'react-native-render-html';
+import { marked } from 'marked';
 import { aboutContent } from '../constants/AboutData';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { testApiConnection } from '../services/api';
 
 export default function AboutScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === 'dark';
   const router = useRouter();
+  const [checking, setChecking] = useState(false);
+
+  const handleTestConnection = async () => {
+    setChecking(true);
+    try {
+      const result = await testApiConnection();
+      Alert.alert(
+        result.success ? '✅ 连接正常' : '❌ 连接失败',
+        result.message,
+        [{ text: '确定' }]
+      );
+    } catch (error: any) {
+      Alert.alert('❌ 测试失败', error.message || '未知错误');
+    } finally {
+      setChecking(false);
+    }
+  };
 
   return (
     <>
@@ -43,7 +62,7 @@ export default function AboutScreen() {
         <SectionHeader title="我们认信" subtitle="We Confess" icon="shield.fill" />
         
         <View className="mb-8">
-            <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">普世信经</Text>
+            <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">三大普世信经</Text>
             <Text className="text-gray-600 dark:text-gray-400 mb-4">{aboutContent.creeds.intro}</Text>
             
             {aboutContent.creeds.universal.map((creed, index) => (
@@ -52,7 +71,7 @@ export default function AboutScreen() {
         </View>
 
         <View className="mb-8">
-            <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">改革宗信条</Text>
+            <Text className="text-xl font-bold text-gray-900 dark:text-white mb-2">三项联合信条</Text>
             {aboutContent.creeds.reformed.map((creed, index) => (
                 <ExpandableCard key={index} title={creed.title} subtitle={creed.subtitle} content={creed.content} isDark={isDark} />
             ))}
@@ -66,7 +85,7 @@ export default function AboutScreen() {
         </View>
 
         {/* Offices */}
-        <SectionHeader title="教会职分" subtitle="Offices" icon="person.3.fill" />
+        <SectionHeader title="三种教会职分" subtitle="Offices" icon="person.3.fill" />
         <View className="mb-8">
             {aboutContent.offices.map((office, index) => (
                 <ExpandableCard key={index} title={office.title} subtitle={office.role} content={office.content} isDark={isDark} />
@@ -74,13 +93,70 @@ export default function AboutScreen() {
         </View>
 
         {/* Sacraments */}
-        <SectionHeader title="圣礼" subtitle="Sacraments" icon="drop.fill" />
+        <SectionHeader title="两项圣礼" subtitle="Sacraments" icon="drop.fill" />
         <View className="mb-12">
             {aboutContent.sacraments.map((sacrament, index) => (
                 <ExpandableCard key={index} title={sacrament.title} subtitle={sacrament.subtitle} content={sacrament.content} isDark={isDark} />
             ))}
         </View>
 
+        {/* Notification Settings */}
+        <View className="mb-4 px-4">
+          <TouchableOpacity
+            onPress={() => router.push('/notification-settings')}
+            className="bg-gradient-to-r bg-purple-600 dark:bg-purple-500 rounded-xl p-4 flex-row items-center justify-between active:bg-purple-700 dark:active:bg-purple-600"
+          >
+            <View className="flex-row items-center flex-1">
+              <IconSymbol name="bell.badge.fill" size={24} color="#fff" />
+              <View className="ml-3 flex-1">
+                <Text className="text-white font-bold text-base">讲道通知</Text>
+                <Text className="text-white/80 text-xs mt-0.5">接收讲道发布推送</Text>
+              </View>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* Reading Stats */}
+        <View className="mb-4 px-4">
+          <TouchableOpacity
+            onPress={() => router.push('/reading-stats')}
+            className="bg-gradient-to-r bg-green-600 dark:bg-green-500 rounded-xl p-4 flex-row items-center justify-between active:bg-green-700 dark:active:bg-green-600"
+          >
+            <View className="flex-row items-center flex-1">
+              <IconSymbol name="chart.bar.fill" size={24} color="#fff" />
+              <View className="ml-3 flex-1">
+                <Text className="text-white font-bold text-base">我的阅读</Text>
+                <Text className="text-white/80 text-xs mt-0.5">查看阅读统计和成就</Text>
+              </View>
+            </View>
+            <IconSymbol name="chevron.right" size={20} color="#fff" />
+          </TouchableOpacity>
+        </View>
+
+        {/* API Status Check */}
+        <View className="mb-12 px-4">
+          <TouchableOpacity
+            onPress={handleTestConnection}
+            disabled={checking}
+            className="bg-blue-600 dark:bg-blue-500 rounded-xl p-4 flex-row items-center justify-center active:bg-blue-700 dark:active:bg-blue-600"
+          >
+            {checking ? (
+              <>
+                <ActivityIndicator color="#fff" size="small" />
+                <Text className="text-white font-bold ml-2">检测中...</Text>
+              </>
+            ) : (
+              <>
+                <IconSymbol name="network" size={20} color="#fff" />
+                <Text className="text-white font-bold ml-2">测试 API 连接</Text>
+              </>
+            )}
+          </TouchableOpacity>
+          <Text className="text-xs text-slate-500 dark:text-slate-400 text-center mt-2">
+            如果遇到网络问题，点击此按钮检查 API 连接状态
+          </Text>
+        </View>
         <View className="h-10" />
       </ScrollView>
     </>
@@ -103,6 +179,33 @@ function SectionHeader({ title, subtitle, icon }: { title: string, subtitle?: st
 
 function ExpandableCard({ title, subtitle, content, isDark }: { title: string, subtitle?: string, content: string, isDark: boolean }) {
     const [expanded, setExpanded] = React.useState(false);
+    const router = useRouter();
+    const { width } = useWindowDimensions();
+
+    const htmlSource = React.useMemo(() => {
+        return { html: marked.parse(content) as string };
+    }, [content]);
+
+    const tagsStyles: any = {
+        body: { color: isDark ? '#cbd5e1' : '#334155', fontSize: 15, lineHeight: 26 },
+        h1: { color: isDark ? '#fff' : '#0f172a', marginTop: 16, marginBottom: 12, fontSize: 18, fontWeight: 'bold' },
+        h2: { color: isDark ? '#f1f5f9' : '#1e293b', marginTop: 16, marginBottom: 10, fontSize: 16, fontWeight: 'bold' },
+        blockquote: { 
+            backgroundColor: isDark ? '#1e293b' : '#f8fafc', 
+            borderLeftColor: '#3b82f6', 
+            borderLeftWidth: 4, 
+            paddingHorizontal: 12, 
+            paddingVertical: 12,
+            fontStyle: 'normal', 
+            color: isDark ? '#94a3b8' : '#475569', 
+            borderRadius: 8, 
+            marginVertical: 8 
+        },
+        ul: { marginBottom: 12 },
+        ol: { marginBottom: 12 },
+        p: { marginBottom: 12 },
+        a: { color: '#2563eb', textDecorationLine: 'none' }
+    };
 
     return (
         <View className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm border border-slate-100 dark:border-slate-800 mb-4 overflow-hidden">
@@ -121,19 +224,23 @@ function ExpandableCard({ title, subtitle, content, isDark }: { title: string, s
             
             {expanded && (
                 <View className="px-5 pb-5 pt-4 bg-slate-50 dark:bg-slate-800/30 border-t border-slate-100 dark:border-slate-800">
-                    <Markdown 
-                        style={{
-                            body: { color: isDark ? '#cbd5e1' : '#334155', fontSize: 15, lineHeight: 26 },
-                            heading1: { color: isDark ? '#fff' : '#0f172a', marginTop: 16, marginBottom: 12, fontSize: 18, fontWeight: 'bold' },
-                            heading2: { color: isDark ? '#f1f5f9' : '#1e293b', marginTop: 16, marginBottom: 10, fontSize: 16, fontWeight: 'bold' },
-                            blockquote: { backgroundColor: isDark ? '#1e293b' : '#f8fafc', borderLeftColor: '#3b82f6', borderLeftWidth: 4, padding: 12, fontStyle: 'italic', color: isDark ? '#94a3b8' : '#475569', borderRadius: 8, marginVertical: 8 },
-                            bullet_list: { marginBottom: 12 },
-                            ordered_list: { marginBottom: 12 },
-                            paragraph: { marginBottom: 12 },
+                    <RenderHtml
+                        contentWidth={width - 40}
+                        source={htmlSource}
+                        tagsStyles={tagsStyles}
+                        renderersProps={{
+                            a: {
+                                onPress: (_, href) => {
+                                    if (href && href.includes('/post/')) {
+                                        const id = href.split('/post/')[1];
+                                        if (id) {
+                                            router.push(`/post/${id}`);
+                                        }
+                                    }
+                                }
+                            }
                         }}
-                    >
-                        {content}
-                    </Markdown>
+                    />
                 </View>
             )}
         </View>

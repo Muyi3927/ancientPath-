@@ -4,34 +4,35 @@ import { AuthContext } from '../App';
 import { UserRole } from '../types';
 import { Lock, User, ArrowRight } from 'lucide-react';
 import { loginUser } from '../services/api';
+import { AlertModal } from '../components/AlertDialog';
 
 export const Login: React.FC = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const { login } = useContext(AuthContext);
   const navigate = useNavigate();
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (username !== 'admin') {
-        alert('用户名错误');
+        setAlertState({ isOpen: true, message: '用户名错误', type: 'error' });
         return;
     }
 
     try {
        const result = await loginUser(password);
        if (result.success && result.token) {
-          // 存储 Token 到 localStorage，供 api.ts 使用
           localStorage.setItem('authToken', result.token);
           login('Admin', UserRole.ADMIN);
           navigate('/');
        } else {
-          alert('认证失败。密码错误。');
+          setAlertState({ isOpen: true, message: '认证失败。密码错误。', type: 'error' });
        }
     } catch (error) {
        console.error(error);
-       alert('登录过程中发生错误');
+       setAlertState({ isOpen: true, message: '登录过程中发生错误', type: 'error' });
     }
   };
 
@@ -86,6 +87,13 @@ export const Login: React.FC = () => {
             </button>
         </form>
       </div>
+
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        message={alertState.message}
+        type={alertState.type}
+      />
     </div>
   );
 };

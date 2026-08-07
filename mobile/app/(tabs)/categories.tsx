@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, ActivityIndicator, ScrollView, SafeAreaView, useColorScheme, Platform, StatusBar } from 'react-native';
 import { Image } from 'expo-image';
 import { Link, useRouter } from 'expo-router';
@@ -36,7 +36,11 @@ export default function CategoriesScreen() {
 
   useEffect(() => {
     const processCategories = (data: Category[]) => {
-        return data.sort((a, b) => {
+        // Exclude Hymns/Poetry categories
+        const excludedNames = ['韵律诗篇', '圣诗'];
+        const filteredData = data.filter(c => !excludedNames.includes(c.name));
+
+        return filteredData.sort((a, b) => {
             const indexA = BIBLE_ORDER.indexOf(a.name);
             const indexB = BIBLE_ORDER.indexOf(b.name);
 
@@ -49,7 +53,7 @@ export default function CategoriesScreen() {
             if (isBibleA) return 1; // Bible books come AFTER others
             if (isBibleB) return -1; // Bible books come AFTER others
 
-            return a.name.localeCompare(b.name, 'zh-CN');
+            return a.name.localeCompare(b.name, 'zh-CN', { numeric: true });
         });
     };
 
@@ -70,7 +74,7 @@ export default function CategoriesScreen() {
         }
         
         if (cachedPosts && cachedPosts.length > 0) {
-            setAllPosts(cachedPosts);
+            setAllPosts(cachedPosts.filter(p => !p.tags.includes('__draft__')));
             setLoadingPosts(false);
         }
       } catch (e) {
@@ -88,19 +92,15 @@ export default function CategoriesScreen() {
             const firstL1 = sortedData.find(c => !c.parentId);
             return firstL1 ? firstL1.id : null;
         });
+
+        // 3. Fetch Posts (in background if needed, but here we invoke explicit load)
+        const posts = await getPosts();
+        setAllPosts(posts.filter(p => !p.tags.includes('__draft__')));
+        setLoadingPosts(false);
       } catch (e) {
         console.error(e);
       } finally {
         setLoadingCats(false);
-      }
-
-      try {
-        const posts = await getPosts();
-        setAllPosts(posts);
-      } catch (e) {
-        console.error(e);
-      } finally {
-        setLoadingPosts(false);
       }
     };
 
@@ -116,22 +116,27 @@ export default function CategoriesScreen() {
   // Determine which category to fetch posts for
   const activeCategoryId = selectedL2Id || selectedL1Id;
 
+  const getCategoryName = (id: number) => categories.find((c) => c.id === id)?.name || '';
+
   // Recursive function to get all descendant category IDs
-  const getDescendantIds = (rootId: number): number[] => {
-      const children = categories.filter(c => c.parentId === rootId);
-      let ids = children.map(c => c.id);
-      children.forEach(child => {
-          ids = [...ids, ...getDescendantIds(child.id)];
-      });
-      return ids;
-  };
+  const getDescendantIds = useCallback((rootId: number, allCats: Category[]): number[] => {
+      const fetchIds = (id: number): number[] => {
+          const children = allCats.filter(c => c.parentId === id);
+          let result = children.map(c => c.id);
+          children.forEach(child => {
+              result = [...result, ...fetchIds(child.id)];
+          });
+          return result;
+      };
+      return fetchIds(rootId);
+  }, []);
 
   const filteredPosts = useMemo(() => {
     if (!activeCategoryId) return [];
     
-    const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId)]);
+    const targetIds = new Set([activeCategoryId, ...getDescendantIds(activeCategoryId, categories)]);
     return allPosts.filter(p => targetIds.has(p.categoryId));
-  }, [allPosts, activeCategoryId, categories]);
+  }, [allPosts, activeCategoryId, categories, getDescendantIds]);
 
   const handleL1Select = (id: number) => {
     setSelectedL1Id(id);
@@ -140,26 +145,35 @@ export default function CategoriesScreen() {
 
   const renderPostItem = ({ item }: { item: BlogPost }) => (
     <Link href={`/post/${item.id}`} asChild>
-      <TouchableOpacity className="bg-white dark:bg-gray-800 p-3 mb-3 rounded-lg shadow-sm border border-gray-100 dark:border-gray-700">
+      <TouchableOpacity className="bg-white dark:bg-[#1e1a14] p-3 mb-3 rounded-lg shadow-sm border border-border-light dark:border-[#302820]">
         {item.coverImage ? (
-          <View className="w-full h-32 rounded-md mb-2 overflow-hidden">
-            <Image 
-                source={{ uri: item.coverImage }} 
+          <View className="relative w-full h-32 rounded-md mb-2 overflow-hidden">
+            <Image
+                source={{ uri: item.coverImage }}
                 style={{ width: '100%', height: '100%' }}
                 contentFit="cover"
                 transition={500}
             />
+            <View className="absolute top-2 left-2 bg-primary-600/90 px-2 py-0.5 rounded shadow-sm">
+              <Text className="text-white text-[10px] font-bold">{getCategoryName(item.categoryId)}</Text>
+            </View>
           </View>
-        ) : null}
-        <Text className="text-base font-bold text-gray-900 dark:text-white mb-1" numberOfLines={2}>{item.title}</Text>
-        <Text className="text-gray-500 dark:text-gray-400 text-xs mb-2" numberOfLines={10}>{item.excerpt}</Text>
+        ) : (
+          <View className="mb-2">
+            <View className="inline-flex bg-primary-600/90 px-2 py-0.5 rounded shadow-sm">
+              <Text className="text-white text-[10px] font-bold">{getCategoryName(item.categoryId)}</Text>
+            </View>
+          </View>
+        )}
+        <Text className="text-base font-bold text-text-primary dark:text-[#f5ece0] mb-1" numberOfLines={2}>{item.title}</Text>
+        <Text className="text-text-secondary dark:text-[#d4c4b0] text-xs mb-2" numberOfLines={10}>{item.excerpt}</Text>
         
         {/* Tags */}
         {item.tags && item.tags.length > 0 && (
           <View className="flex-row flex-wrap mb-2">
             {item.tags.map((tag, index) => (
-              <View key={index} className="bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded mr-2 mb-1">
-                <Text className="text-[10px] text-gray-600 dark:text-gray-300">{tag}</Text>
+              <View key={index} className="bg-warm-100 dark:bg-[#252018] px-2 py-1 rounded mr-2 mb-1">
+                <Text className="text-[10px] text-text-secondary dark:text-[#d4c4b0]">{tag}</Text>
               </View>
             ))}
           </View>
@@ -170,29 +184,29 @@ export default function CategoriesScreen() {
 
   if (loadingCats) {
     return (
-      <View className="flex-1 items-center justify-center bg-white dark:bg-black">
-        <ActivityIndicator size="large" color="#2563eb" />
+      <View className="flex-1 items-center justify-center bg-white dark:bg-[#1e1a14]">
+        <ActivityIndicator size="large" color="#e36208" />
       </View>
     );
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-gray-50 dark:bg-black" style={{ paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }}>
+    <SafeAreaView className="flex-1 bg-warm-50 dark:bg-[#12100c]" style={{ paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight : 0 }}>
       {/* Top Horizontal L1 Categories */}
-      <View className="h-12 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800">
+      <View className="h-12 bg-white dark:bg-[#1e1a14] border-b border-border dark:border-[#4a3f30]">
         <ScrollView horizontal showsHorizontalScrollIndicator={false} className="px-2">
           {l1Categories.map(cat => (
             <TouchableOpacity
               key={cat.id}
               onPress={() => handleL1Select(cat.id)}
               className={`px-4 justify-center h-full border-b-2 ${
-                selectedL1Id === cat.id ? 'border-blue-600' : 'border-transparent'
+                selectedL1Id === cat.id ? 'border-primary-600' : 'border-transparent'
               }`}
             >
               <Text className={`text-lg ${
-                selectedL1Id === cat.id 
-                  ? 'text-blue-600 font-bold' 
-                  : 'text-gray-600 dark:text-gray-400'
+                selectedL1Id === cat.id
+                  ? 'text-primary-600 font-bold'
+                  : 'text-text-secondary dark:text-[#d4c4b0]'
               }`}>
                 {cat.name}
               </Text>
@@ -203,20 +217,20 @@ export default function CategoriesScreen() {
 
       <View className="flex-1 flex-row">
         {/* Left Vertical L2 Categories */}
-        <View className="w-24 bg-gray-100 dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800">
+        <View className="w-24 bg-warm-100 dark:bg-[#1a1610] border-r border-border dark:border-[#4a3f30]">
           <ScrollView className="flex-1">
             <TouchableOpacity
               onPress={() => setSelectedL2Id(null)}
               className={`p-3 border-l-4 ${
-                selectedL2Id === null 
-                  ? 'bg-white dark:bg-black border-blue-600' 
+                selectedL2Id === null
+                  ? 'bg-white dark:bg-[#1e1a14] border-primary-600'
                   : 'border-transparent'
               }`}
             >
               <Text className={`text-base ${
-                selectedL2Id === null 
-                  ? 'text-blue-600 font-bold' 
-                  : 'text-gray-600 dark:text-gray-400'
+                selectedL2Id === null
+                  ? 'text-primary-600 font-bold'
+                  : 'text-text-secondary dark:text-[#d4c4b0]'
               }`}>全部</Text>
             </TouchableOpacity>
             {l2Categories.map(cat => (
@@ -224,15 +238,15 @@ export default function CategoriesScreen() {
                 key={cat.id}
                 onPress={() => setSelectedL2Id(cat.id)}
                 className={`p-3 border-l-4 ${
-                  selectedL2Id === cat.id 
-                    ? 'bg-white dark:bg-black border-blue-600' 
+                  selectedL2Id === cat.id
+                    ? 'bg-white dark:bg-[#1e1a14] border-primary-600'
                     : 'border-transparent'
                 }`}
               >
                 <Text className={`text-base ${
-                  selectedL2Id === cat.id 
-                    ? 'text-blue-600 font-bold' 
-                    : 'text-gray-600 dark:text-gray-400'
+                  selectedL2Id === cat.id
+                    ? 'text-primary-600 font-bold'
+                    : 'text-text-secondary dark:text-[#d4c4b0]'
                 }`}>
                   {cat.name}
                 </Text>
@@ -242,7 +256,7 @@ export default function CategoriesScreen() {
         </View>
 
         {/* Right Main Content */}
-        <View className="flex-1 bg-gray-50 dark:bg-black p-2">
+        <View className="flex-1 bg-warm-50 dark:bg-[#12100c] p-2">
           {loadingPosts ? (
             <View className="flex-1 items-center justify-center">
               <ActivityIndicator color="#2563eb" />
@@ -254,7 +268,7 @@ export default function CategoriesScreen() {
               keyExtractor={(item) => item.id.toString()}
               ListEmptyComponent={
                 <View className="items-center justify-center py-10">
-                  <Text className="text-gray-400 dark:text-gray-500">该分类下暂无讲道</Text>
+                  <Text className="text-text-muted dark:text-[#a89880]">该分类下暂无讲道</Text>
                 </View>
               }
             />

@@ -5,11 +5,13 @@ import { StatusBar } from 'expo-status-bar';
 import 'react-native-reanimated';
 import { useState, useEffect } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 import { useColorScheme } from '@/hooks/use-color-scheme';
 import { AudioProvider } from '../context/AudioContext';
 import FloatingPlayer from '../components/FloatingPlayer';
 import AppSplashScreen from '../components/AppSplashScreen';
+import { ErrorBoundary } from '../components/ErrorBoundary';
 
 // Prevent the native splash screen from auto-hiding before asset loading is complete.
 SplashScreen.preventAutoHideAsync();
@@ -49,18 +51,22 @@ export default function RootLayout() {
   }
 
   return (
-    <AudioProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        {showCustomSplash && (
-            <AppSplashScreen onFinish={() => setShowCustomSplash(false)} />
-        )}
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="post/[id]" options={{ headerShown: true }} />
-        </Stack>
-        <FloatingPlayer />
-        <StatusBar style="auto" />
-      </ThemeProvider>
-    </AudioProvider>
+    <ErrorBoundary>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AudioProvider>
+          <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+            {showCustomSplash && (
+                <AppSplashScreen onFinish={() => setShowCustomSplash(false)} />
+            )}
+            <Stack>
+              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              <Stack.Screen name="post/[id]" options={{ headerShown: true }} />
+            </Stack>
+            <FloatingPlayer />
+            <StatusBar style="auto" />
+          </ThemeProvider>
+        </AudioProvider>
+      </GestureHandlerRootView>
+    </ErrorBoundary>
   );
 }

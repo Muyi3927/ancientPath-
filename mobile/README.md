@@ -1,50 +1,45 @@
-# Welcome to your Expo app 👋
+# 访问古道 - 移动端
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+基于 Expo SDK 54 的 React Native 移动应用。
 
-## Get started
-
-1. Install dependencies
-
-   ```bash
-   npm install
-   ```
-
-2. Start the app
-
-   ```bash
-   npx expo start
-   ```
-
-In the output, you'll find options to open the app in a
-
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
-
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
-
-## Get a fresh project
-
-When you're ready, run:
+## 开发环境
 
 ```bash
-npm run reset-project
+cd mobile
+npm install
+npx expo start
 ```
 
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+扫描二维码即可在 Expo Go 中预览，修改代码后自动热更新。
 
-## Learn more
+## 生产环境热更新 (OTA)
 
-To learn more about developing your project with Expo, look at the following resources:
+项目已配置 EAS Update，支持 Over-The-Air 热更新。
 
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
+### 首次配置
 
-## Join the community
+```bash
+npm install -g eas-cli
+eas login
+```
 
-Join our community of developers creating universal apps.
+### 发布更新
 
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
+```bash
+# 发布到生产环境
+eas update --branch production --message "更新描述"
+
+# 发布到预览分支
+eas update --branch preview --message "测试更新"
+
+# 查看更新历史
+eas update:list
+```
+
+用户打开 App 时会自动检查并下载更新（已配置 `checkAutomatically: "ON_LOAD"`）。
+
+### 注意事项
+
+- JS 代码变更可以通过 OTA 更新
+- 原生模块变更（如新增原生依赖）需要重新构建 App
+- `runtimeVersion` 配置为 `appVersion`，用户更新 App 版本后自动获取最新 OTA 更新

@@ -43,3 +43,5 @@ app-example
 # generated native folders
 /ios
 /android
+ancient-path.keystore
+ancient-path.jks

@@ -25,9 +25,14 @@ dist-ssr
 
 lumina-blog-media/*
 lumina-blog-media-optimized/*
-mobile/assets/*
+# mobile/assets/*  <-- 移除或注释掉这一行
 backend/wrangler.toml
 backend/.dev.vars
 .env
 .env.*
 !.env.example
+CosyVoice/
+
+# Backups
+backups/
+logos

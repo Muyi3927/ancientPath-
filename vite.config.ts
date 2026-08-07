@@ -8,13 +8,16 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      devOptions: {
-        enabled: true
+      workbox: {
+        navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/]
       },
-      includeAssets: ['logo.svg'],
+      devOptions: {
+        enabled: false
+      },
+      includeAssets: ['logo.svg', 'robots.txt', 'sitemap.xml'],
       manifest: {
-        name: '访问古道 | Ancient Paths',
-        short_name: 'AncientPaths',
+        name: '访问古道 | 传承欧陆改革宗信仰',
+        short_name: '访问古道',
         description: '一个传承欧陆改革宗信仰的博客平台',
         theme_color: '#ffffff',
         icons: [
@@ -30,5 +33,24 @@ export default defineConfig({
   define: {
     // Ensure process.env is available for the API Key usage in geminiService.ts
     'process.env': process.env
+  },
+  server: {
+    watch: {
+      ignored: [
+        '**/backups/**',
+        '**/CosyVoice/**',
+        '**/mobile/**',
+        '**/outputs/**',
+        '**/lumina-blog-media/**',
+        '**/lumina-blog-media-optimized/**',
+        '**/dev-dist/**'
+      ]
+    },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:8787',
+        changeOrigin: true,
+      }
+    }
   }
 });

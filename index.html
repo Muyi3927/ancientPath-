@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#ffffff" />
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
-    <title>访问古道 | Ancient Paths</title>
+    <title>访问古道 | 传承欧陆改革宗信仰</title>
     <meta name="description" content="一个传承欧陆改革宗信仰的博客平台" />
     
     <!-- Tailwind CDN is kept for simplicity to avoid complex build config changes, ensuring styles work exactly as you see them now. -->
@@ -16,17 +16,52 @@
         theme: {
           extend: {
             fontFamily: {
-              sans: ['Inter', 'sans-serif'],
-              serif: ['Merriweather', 'serif'],
+              sans: ['"Noto Serif SC"', 'Georgia', 'serif'],
+              serif: ['"Noto Serif SC"', 'Georgia', 'serif'],
+              heading: ['"Noto Sans SC"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
             },
             colors: {
               primary: {
-                50: '#eff6ff',
-                100: '#dbeafe',
-                500: '#3b82f6',
-                600: '#2563eb',
-                700: '#1d4ed8',
-              }
+                50: '#fef8ee',
+                100: '#fdf0d6',
+                200: '#fbd9a8',
+                300: '#f8bf70',
+                400: '#f59e38',
+                500: '#f27d12',
+                600: '#e36208',
+                700: '#bc4a09',
+                800: '#963a0f',
+                900: '#7a3110',
+              },
+              accent: {
+                50: '#eef3ff',
+                100: '#dfe8ff',
+                200: '#c6d4ff',
+                300: '#a3b8ff',
+                400: '#7e93fc',
+                500: '#5c6df5',
+                600: '#4248e9',
+                700: '#3538ce',
+                800: '#2c30a6',
+                900: '#292e84',
+              },
+              warm: {
+                50: '#fdfaf5',
+                100: '#f9f2e7',
+                200: '#f2e4cc',
+                300: '#e8d0a8',
+              },
+              surface: {
+                DEFAULT: '#ffffff',
+                alt: '#faf8f5',
+              },
+              border: {
+                DEFAULT: '#e8ddd0',
+                light: '#f0e8dc',
+              },
+              'text-primary': '#3d2e1f',
+              'text-secondary': '#6d5c4a',
+              'text-muted': '#a08e7a',
             },
             typography: (theme) => ({
               DEFAULT: {
@@ -35,12 +70,13 @@
                   'code::after': { content: '""' },
                   'blockquote p:first-of-type::before': { content: 'none' },
                   'blockquote p:last-of-type::after': { content: 'none' },
+                  blockquote: { fontStyle: 'normal' },
                   code: {
-                    backgroundColor: theme('colors.slate.200'),
+                    backgroundColor: '#f2e4cc',
                     padding: '0.2em 0.4em',
                     borderRadius: '0.25rem',
                     fontWeight: '600',
-                    color: theme('colors.slate.900'), 
+                    color: '#3d2e1f',
                   },
                   'pre code': {
                     backgroundColor: 'transparent',
@@ -52,8 +88,8 @@
               invert: {
                 css: {
                   code: {
-                    backgroundColor: theme('colors.slate.800'),
-                    color: theme('colors.slate.100'),
+                    backgroundColor: '#352c20',
+                    color: '#f5ece0',
                   },
                   'pre code': {
                     backgroundColor: 'transparent',
@@ -66,16 +102,231 @@
         },
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Noto+Serif+SC:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
       html {
-        background-color: #f8fafc;
+        background-color: #fdfaf5;
       }
       html.dark {
-        background-color: #020617;
+        background-color: #1e1a14;
       }
       strong {
         font-weight: 700 !important;
+      }
+      
+      /* 打印样式优化 - 解决PDF导出分页问题 */
+      @media print {
+        * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        
+        /* 页面设置 */
+        @page {
+          margin: 20mm;
+          size: A4;
+        }
+        
+        /* 隐藏不需要打印的元素 */
+        nav, footer, button, .print\\:hidden,
+        [class*="print:hidden"],
+        .fixed, .sticky {
+          display: none !important;
+        }
+        
+        /* 显示仅打印时的元素 */
+        .print\\:block {
+          display: block !important;
+        }
+        
+        .hidden.print\\:block {
+          display: block !important;
+        }
+        
+        /* 主容器样式 */
+        body {
+          background: white !important;
+          color: #1f2937 !important;
+          font-size: 12pt !important;
+          line-height: 1.6 !important;
+        }
+        
+        /* 文章容器 */
+        article {
+          page-break-inside: avoid;
+          break-inside: avoid;
+          margin: 0 !important;
+          padding: 0 !important;
+          max-width: none !important;
+          background: white !important;
+        }
+        
+        /* 标题样式 */
+        h1 {
+          font-size: 18pt !important;
+          font-weight: bold !important;
+          color: #1f2937 !important;
+          margin: 0 0 16pt 0 !important;
+          page-break-after: avoid;
+          break-after: avoid;
+        }
+        
+        h2 {
+          font-size: 16pt !important;
+          font-weight: bold !important;
+          color: #374151 !important;
+          margin: 20pt 0 12pt 0 !important;
+          page-break-after: avoid;
+          break-after: avoid;
+        }
+        
+        h3, h4, h5, h6 {
+          font-size: 14pt !important;
+          font-weight: 600 !important;
+          color: #374151 !important;
+          margin: 16pt 0 8pt 0 !important;
+          page-break-after: avoid;
+          break-after: avoid;
+        }
+        
+        /* 段落样式 */
+        p {
+          font-size: 12pt !important;
+          line-height: 1.6 !important;
+          color: #374151 !important;
+          margin: 0 0 12pt 0 !important;
+          orphans: 3;
+          widows: 3;
+          text-align: justify;
+        }
+        
+        /* 列表样式 */
+        ul, ol {
+          margin: 12pt 0 !important;
+          padding-left: 20pt !important;
+        }
+        
+        li {
+          font-size: 12pt !important;
+          line-height: 1.5 !important;
+          color: #374151 !important;
+          margin: 4pt 0 !important;
+        }
+        
+        /* 引用样式 */
+        blockquote {
+          font-size: 11pt !important;
+          color: #6b7280 !important;
+          border-left: 3pt solid #d1d5db !important;
+          padding-left: 12pt !important;
+          margin: 16pt 0 !important;
+          font-style: italic;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        
+        /* 代码样式 */
+        code {
+          font-size: 10pt !important;
+          color: #1f2937 !important;
+          background: #f3f4f6 !important;
+          padding: 2pt 4pt !important;
+          border-radius: 2pt !important;
+        }
+        
+        pre {
+          font-size: 10pt !important;
+          background: #f9fafb !important;
+          border: 1pt solid #e5e7eb !important;
+          padding: 8pt !important;
+          border-radius: 4pt !important;
+          margin: 12pt 0 !important;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          overflow: visible !important;
+          white-space: pre-wrap !important;
+          word-wrap: break-word !important;
+        }
+        
+        pre code {
+          background: none !important;
+          padding: 0 !important;
+          border: none !important;
+        }
+        
+        /* 表格样式 */
+        table {
+          width: 100% !important;
+          border-collapse: collapse !important;
+          margin: 16pt 0 !important;
+          font-size: 11pt !important;
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        
+        th, td {
+          border: 1pt solid #d1d5db !important;
+          padding: 6pt !important;
+          text-align: left !important;
+        }
+        
+        th {
+          background: #f3f4f6 !important;
+          font-weight: 600 !important;
+        }
+        
+        /* 图片样式 */
+        img {
+          max-width: 100% !important;
+          height: auto !important;
+          page-break-inside: avoid;
+          break-inside: avoid;
+          margin: 12pt 0 !important;
+          border-radius: 4pt !important;
+        }
+        
+        /* 分页控制 */
+        .page-break-before {
+          page-break-before: always;
+          break-before: page;
+        }
+        
+        .page-break-after {
+          page-break-after: always;
+          break-after: page;
+        }
+        
+        .no-page-break {
+          page-break-inside: avoid;
+          break-inside: avoid;
+        }
+        
+        /* 链接样式 */
+        a {
+          color: #2563eb !important;
+          text-decoration: underline !important;
+        }
+        
+        /* 确保文章内容能够正常分页 */
+        .prose, .prose p, .prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6 {
+          max-width: none !important;
+        }
+        
+        /* 移除所有固定定位和绝对定位 */
+        * {
+          position: static !important;
+          float: none !important;
+          max-height: none !important;
+          overflow: visible !important;
+        }
+        
+        /* 确保容器不限制高度 */
+        .container, .max-w-4xl, .mx-auto {
+          max-width: none !important;
+          height: auto !important;
+          margin: 0 !important;
+        }
       }
     </style>
   <script type="importmap">
@@ -99,7 +350,7 @@
 }
 </script>
 </head>
-  <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 transition-colors duration-300">
+  <body class="bg-warm-50 text-text-primary dark:bg-[#1e1a14] dark:text-[#f5ece0] transition-colors duration-300" style="font-family: 'Noto Serif SC', Georgia, serif;">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

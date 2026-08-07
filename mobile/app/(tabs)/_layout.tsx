@@ -8,13 +8,15 @@ import { useColorScheme } from '@/hooks/use-color-scheme';
 
 export default function TabLayout() {
   const colorScheme = useColorScheme();
+  const theme = colorScheme ?? 'light';
+  const activeColor = Colors[theme] ? Colors[theme].tint : Colors.light.tint;
 
   return (
     <Tabs
       screenOptions={{
-        tabBarActiveTintColor: Colors[colorScheme ?? 'light'].tint,
+        tabBarActiveTintColor: activeColor,
         headerShown: false,
-        tabBarButton: HapticTab,
+        // tabBarButton: HapticTab, // Disable custom tab button to debug layout issues
       }}>
       <Tabs.Screen
         name="index"
@@ -36,6 +38,13 @@ export default function TabLayout() {
         options={{
           title: '分类',
           tabBarIcon: ({ color }) => <IconSymbol size={28} name="folder.fill" color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="hymns"
+        options={{
+          title: '诗歌',
+          tabBarIcon: ({ color }) => <IconSymbol size={28} name="music.note" color={color} />,
         }}
       />
     </Tabs>

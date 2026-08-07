@@ -4,7 +4,9 @@ import { format } from 'date-fns';
 import { BlogPost, Category } from '../types';
 import { AuthContext } from '../App';
 import MarkdownRenderer from '../components/MarkdownRenderer';
-import { ArrowLeft, Calendar, User, Share2, Tag, Type, Minus, Plus, Volume2, Edit, Gauge, Trash2, List, X, FileDown } from 'lucide-react';
+import BibleVerseModal from '../components/BibleVerseModal';
+import { AlertModal } from '../components/AlertDialog';
+import { ArrowLeft, Calendar, Share2, Tag, Type, Volume2, Edit, Gauge, Trash2, List, X, FileDown, RotateCcw, RotateCw, ZoomIn, ZoomOut } from 'lucide-react';
 
 interface PostDetailProps {
   posts: BlogPost[];
@@ -22,18 +24,64 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // Audio State
   const audioRef = useRef<HTMLAudioElement>(null);
   
+  // Bible Verse Modal State
+  const [showBibleModal, setShowBibleModal] = useState(false);
+  const [selectedBibleReference, setSelectedBibleReference] = useState('');
+  const [bibleVersion, setBibleVersion] = useState<'cuv' | 'bilingual' | 'asv' | 'ncv'>('cuv');
+  
   // Accessibility: Font Size State
-  const [fontSizeLevel, setFontSizeLevel] = useState(0);
-  const fontClasses = ['prose-lg', 'prose-xl', 'prose-2xl'];
+  // Default to 1.2 for better readability
+  const [fontSizeScale, setFontSizeScale] = useState(1.2);
+  const [showFontSizePicker, setShowFontSizePicker] = useState(false);
+
+  // Alert Modal State
+  const [alertState, setAlertState] = useState<{ isOpen: boolean; title?: string; message: string; type?: 'info' | 'success' | 'error' | 'warning' }>({ isOpen: false, message: '' });
+
+  // Helpers
+  const decreaseFont = () => setFontSizeScale(s => Math.max(0.8, Math.round((s - 0.1) * 10) / 10));
+  const increaseFont = () => setFontSizeScale(s => Math.min(2.0, Math.round((s + 0.1) * 10) / 10));
 
   // TOC State
   const [showTOC, setShowTOC] = useState(false);
   const [headings, setHeadings] = useState<{id: string, text: string, level: number}[]>([]);
+  const [tocMaxLevel, setTocMaxLevel] = useState(3);
+  const [currentHeadingId, setCurrentHeadingId] = useState<string>('');
+  const tocContainerRef = useRef<HTMLDivElement>(null);
+  const pendingScrollId = useRef<string | null>(null);
+
+  // 获取实际的滚动容器（Layout中的 overflow-y-auto div）
+  const getScrollContainer = () => {
+    return document.querySelector('.overflow-y-auto') as HTMLElement | null;
+  };
+
+  // 当模态框关闭后，执行滚动
+  useEffect(() => {
+    if (!showTOC && pendingScrollId.current) {
+      const targetId = pendingScrollId.current;
+      pendingScrollId.current = null;
+      // 等待模态框DOM完全移除
+      requestAnimationFrame(() => {
+        const el = document.getElementById(targetId);
+        const container = getScrollContainer();
+        if (el && container) {
+          const containerRect = container.getBoundingClientRect();
+          const elRect = el.getBoundingClientRect();
+          const scrollTop = container.scrollTop + (elRect.top - containerRect.top) - 20;
+          container.scrollTo({ top: scrollTop, behavior: 'smooth' });
+        }
+      });
+    }
+  }, [showTOC]);
+
+  // Image Preview State
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [imageRotation, setImageRotation] = useState(0);
+  const [imageScale, setImageScale] = useState(1);
 
   useEffect(() => {
     if (post) {
       const timer = setTimeout(() => {
-        const elements = document.querySelectorAll('.prose h1, .prose h2, .prose h3');
+        const elements = document.querySelectorAll('.prose h1, .prose h2, .prose h3, .prose h4, .prose h5, .prose h6');
         const h = Array.from(elements).map(el => ({
           id: el.id,
           text: el.textContent || '',
@@ -44,6 +92,49 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       return () => clearTimeout(timer);
     }
   }, [post]);
+
+  // Track current heading on scroll
+  useEffect(() => {
+    const container = getScrollContainer();
+    if (!container) return;
+
+    const handleScroll = () => {
+      if (headings.length === 0) return;
+      
+      const containerRect = container.getBoundingClientRect();
+      const scrollThreshold = containerRect.top + 100;
+      
+      // Find current heading
+      let currentId = '';
+      for (let i = headings.length - 1; i >= 0; i--) {
+        const element = document.getElementById(headings[i].id);
+        if (element) {
+          const rect = element.getBoundingClientRect();
+          if (rect.top <= scrollThreshold) {
+            currentId = headings[i].id;
+            break;
+          }
+        }
+      }
+      
+      setCurrentHeadingId(currentId);
+    };
+
+    container.addEventListener('scroll', handleScroll);
+    handleScroll(); // Initial check
+    
+    return () => container.removeEventListener('scroll', handleScroll);
+  }, [headings]);
+
+  // Scroll TOC to current heading when opened
+  useEffect(() => {
+    if (showTOC && currentHeadingId && tocContainerRef.current) {
+      const currentButton = tocContainerRef.current.querySelector(`[data-heading-id="${currentHeadingId}"]`);
+      if (currentButton) {
+        currentButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [showTOC, currentHeadingId]);
 
   useEffect(() => {
     // --- 修复: 使用非严格相等 (==) 来比较数字 ID 和 URL 中的字符串 ID ---
@@ -64,9 +155,9 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   const handleShare = () => {
     const url = window.location.href;
     navigator.clipboard.writeText(url).then(() => {
-        alert("链接已复制到剪贴板！");
+        setAlertState({ isOpen: true, message: '链接已复制到剪贴板！', type: 'success' });
     }).catch(() => {
-        alert("复制失败，请手动复制网址。");
+        setAlertState({ isOpen: true, message: '复制失败，请手动复制网址。', type: 'error' });
     });
   };
 
@@ -75,9 +166,6 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           audioRef.current.playbackRate = parseFloat(e.target.value);
       }
   };
-
-  const increaseFont = () => setFontSizeLevel(prev => Math.min(prev + 1, 2));
-  const decreaseFont = () => setFontSizeLevel(prev => Math.max(prev - 1, 0));
 
   const handleDelete = async () => {
       if (post && await onDeletePost(post.id)) {
@@ -89,12 +177,56 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
   // 但为了保险起见，或者如果 categories 还没加载完，我们做个防御性检查。
   const categoryName = categories?.find(c => String(c.id) === String(post.categoryId))?.name || '未分类';
   
+  // 获取返回链接和文本
+  const getBackLink = () => {
+    if (!categories || !post) {
+      return { path: '/', text: '返回列表' };
+    }
+    
+    // 查找当前文章的分类
+    let currentCategory = categories.find(c => String(c.id) === String(post.categoryId));
+    
+    if (!currentCategory) {
+      return { path: '/', text: '返回列表' };
+    }
+    
+    // 向上追溯，找到顶级分类
+    let topCategory = currentCategory;
+    while (topCategory.parentId) {
+      const parent = categories.find(c => c.id === topCategory.parentId);
+      if (parent) {
+        topCategory = parent;
+      } else {
+        break;
+      }
+    }
+    
+    // 判断顶级分类是否是诗歌类
+    if (topCategory.name === '韵律诗篇' || topCategory.name === '圣诗') {
+      return { path: '/hymns', text: '返回诗歌' };
+    }
+    
+    // 其他分类返回到分类页面，带上当前分类参数以便正确定位
+    return { path: `/categories?category=${currentCategory.id}`, text: `返回${currentCategory.name}` };
+  };
+  
+  const backLink = getBackLink();
+  
+  const handleImageClick = (src: string) => {
+    setPreviewImage(src);
+    setImageRotation(0);
+    setImageScale(1);
+  };
+
   return (
     <div className="max-w-4xl mx-auto">
       <div className="flex flex-wrap gap-4 justify-between items-center mb-6 print:hidden">
           <div className="flex items-center gap-4">
-            <Link to="/" className="flex items-center text-slate-500 hover:text-primary-600 transition-colors">
-                <ArrowLeft className="w-4 h-4 mr-2" /> 返回列表
+            <Link 
+              to={backLink.path} 
+              className="flex items-center text-slate-500 hover:text-primary-600 transition-colors"
+            >
+                <ArrowLeft className="w-4 h-4 mr-2" /> {backLink.text}
             </Link>
             {isAdmin && (
                 <div className="flex gap-2">
@@ -113,9 +245,24 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
             <button 
                 onClick={() => {
                     const originalTitle = document.title;
+                    const originalBody = document.body.className;
+                    
+                    // 设置文档标题
                     document.title = `访问古道_${post.title}`;
-                    window.print();
-                    document.title = originalTitle;
+                    
+                    // 确保打印样式正确应用
+                    document.body.className = originalBody + ' print-mode';
+                    
+                    // 延迟执行打印以确保样式生效
+                    setTimeout(() => {
+                        window.print();
+                        
+                        // 恢复原始状态
+                        setTimeout(() => {
+                            document.title = originalTitle;
+                            document.body.className = originalBody;
+                        }, 100);
+                    }, 100);
                 }}
                 className="flex items-center gap-2 px-3 py-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-full border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors text-sm font-medium shadow-sm"
                 title="导出为 PDF"
@@ -124,34 +271,32 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                 <span>导出 PDF</span>
             </button>
 
-          <div className="flex items-center bg-white dark:bg-slate-800 rounded-full p-1 border border-slate-200 dark:border-slate-700 shadow-sm">
-             <div className="px-3 flex items-center gap-2 text-xs text-slate-400 font-bold uppercase tracking-wider">
-                <Type className="w-3 h-3" /> 字体
-             </div>
-             <button 
-                onClick={decreaseFont} 
-                disabled={fontSizeLevel === 0}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full disabled:opacity-30 transition-colors"
-                title="减小字体"
+          <div className="flex items-center gap-1">
+             <button
+                onClick={() => setShowFontSizePicker(prev => !prev)}
+                className={`p-2 rounded-full border transition-colors ${showFontSizePicker ? 'bg-primary-100 dark:bg-primary-900/30 border-primary-300 dark:border-primary-700 text-primary-600' : 'bg-white dark:bg-[#252018] border-border dark:border-[#4a3f30] text-text-secondary dark:text-[#d4c4b0]'}`}
+                title="字体大小"
              >
-                <Minus className="w-4 h-4" />
-             </button>
-             <span className="text-xs font-mono w-4 text-center">{fontSizeLevel + 1}</span>
-             <button 
-                onClick={increaseFont} 
-                disabled={fontSizeLevel === 2}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full disabled:opacity-30 transition-colors"
-                title="增大字体"
-             >
-                <Plus className="w-4 h-4" />
+                <Type className="w-4 h-4" />
              </button>
           </div>
           </div>
+
+          {/* Font Size Picker */}
+          {showFontSizePicker && (
+            <div className="px-4 py-2 border-b border-border dark:border-[#4a3f30] bg-warm-50 dark:bg-[#252018]/60">
+              <div className="flex items-center justify-between">
+                <button onClick={decreaseFont} className="px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30] text-text-primary dark:text-[#f5ece0] font-semibold text-sm">A-</button>
+                <span className="text-text-primary dark:text-[#f5ece0] font-semibold text-sm">{(fontSizeScale * 100).toFixed(0)}%</span>
+                <button onClick={increaseFont} className="px-3 py-1.5 rounded-lg bg-warm-200 dark:bg-[#4a3f30] text-text-primary dark:text-[#f5ece0] font-semibold text-sm">A+</button>
+              </div>
+            </div>
+          )}
       </div>
 
-      <article className="bg-white dark:bg-slate-900 rounded-3xl overflow-hidden shadow-xl border border-slate-100 dark:border-slate-800">
+      <article className="bg-white dark:bg-slate-900 md:rounded-3xl overflow-hidden shadow-none md:shadow-xl border-y md:border border-slate-100 dark:border-slate-800 -mx-4 md:mx-0">
         {/* Cover Image */}
-        <div className="h-64 md:h-96 w-full relative">
+        <div className="h-64 md:h-96 w-full relative print:hidden">
            <img src={post.coverImage} alt={post.title} className="w-full h-full object-cover" />
            <div className="absolute inset-0 bg-gradient-to-t from-slate-900/90 via-slate-900/30 to-transparent"></div>
            <div className="absolute bottom-0 left-0 p-6 md:p-12 text-white w-full">
@@ -159,7 +304,6 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
                   <div className="flex items-center gap-4 mb-4 text-sm text-slate-300">
                      <span className="bg-primary-600 px-2 py-0.5 rounded text-white text-xs font-bold">{categoryName}</span>
                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> {format(post.createdAt, 'yyyy年M月d日')}</span>
-                     <span className="flex items-center gap-1"><User className="w-3 h-3" /> {post.author.username}</span>
                   </div>
               </div>
               <h1 className="text-3xl md:text-5xl font-serif font-bold leading-tight shadow-sm">{post.title}</h1>
@@ -167,7 +311,25 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
         </div>
 
         <div className="p-6 md:p-12">
-          <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800">
+          {/* 打印时显示的标题和信息 */}
+          <div className="hidden print:block mb-8">
+            <h1 className="text-2xl font-serif font-bold text-black mb-2">{post.title}</h1>
+            <div className="flex items-center gap-4 text-sm text-text-secondary mb-4">
+              <span>分类：{categoryName}</span>
+              <span>发布时间：{format(post.createdAt, 'yyyy年M月d日')}</span>
+            </div>
+            <div className="border-b border-border pb-4 mb-6">
+              <div className="flex gap-2 flex-wrap">
+                {post.tags.map(tag => (
+                  <span key={tag} className="text-xs px-2 py-1 bg-warm-100 rounded text-text-secondary">
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between mb-8 pb-8 border-b border-slate-100 dark:border-slate-800 print:hidden">
              <div className="flex gap-2 flex-wrap">
                 {post.tags.map(tag => (
                    <Link 
@@ -190,9 +352,12 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {post.audioUrl && (
               <div className="mb-10 bg-slate-50 dark:bg-slate-800 rounded-xl p-4 border border-slate-200 dark:border-slate-700 print:hidden">
                   <div className="flex items-center justify-between mb-3 text-primary-600 font-bold">
-                      <div className="flex items-center gap-2">
-                        <Volume2 className="w-5 h-5" /> 
-                        <span>收听音频</span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2 mb-1">
+                            <Volume2 className="w-5 h-5" /> 
+                            <span>收听音频</span>
+                        </div>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-7 line-clamp-1">{post.title}</span>
                       </div>
                       
                       <div className="flex items-center gap-2">
@@ -224,11 +389,100 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
           {/* Post Content with dynamic font size class */}
           <MarkdownRenderer 
             content={post.content} 
-            className={`${fontClasses[fontSizeLevel]} max-w-none font-serif text-slate-700 dark:text-slate-300 leading-loose transition-all duration-200`} 
+            className={`max-w-none font-serif text-slate-700 dark:text-slate-300 transition-all duration-200`} 
+            style={{ 
+              fontSize: `${fontSizeScale}rem`,
+              lineHeight: '1.8',
+              letterSpacing: '0.025em',
+              wordSpacing: '0.05em'
+            }}
+            onImageClick={handleImageClick}
+            onBibleVerseClick={(reference) => {
+              setSelectedBibleReference(reference);
+              setShowBibleModal(true);
+            }}
           />
 
         </div>
       </article>
+
+      {/* Image Preview Modal */}
+      {previewImage && (
+        <div 
+            className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-black/95 backdrop-blur-sm"
+            onClick={() => setPreviewImage(null)}
+        >
+            {/* Top Bar */}
+            <div className="absolute top-0 left-0 right-0 p-4 flex justify-end z-20" onClick={e => e.stopPropagation()}>
+                <button 
+                    onClick={() => setPreviewImage(null)}
+                    className="p-2 bg-white/10 hover:bg-white/20 rounded-full text-white transition-colors"
+                >
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
+
+            {/* Image Container */}
+            <div 
+                className="flex-1 flex items-center justify-center w-full h-full p-4 pt-16 pb-28 overflow-hidden"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  // Close if clicking the background area (not the image itself)
+                  if (e.target === e.currentTarget) {
+                    setPreviewImage(null);
+                  }
+                }}
+            >
+                <img 
+                    src={previewImage} 
+                    alt="Preview" 
+                    className="max-w-full max-h-full object-contain transition-transform duration-300 ease-out shadow-2xl"
+                    style={{ 
+                        transform: `rotate(${imageRotation}deg) scale(${imageScale})`,
+                        cursor: 'grab'
+                    }}
+                />
+            </div>
+
+            {/* Bottom Controls */}
+            <div 
+                className="absolute bottom-10 left-1/2 -translate-x-1/2 flex items-center gap-6 bg-white/10 backdrop-blur-md px-6 py-3 rounded-full border border-white/20 z-20"
+                onClick={e => e.stopPropagation()}
+            >
+                <button 
+                  onClick={() => setImageRotation(r => r - 90)} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="向左旋转"
+                >
+                    <RotateCcw className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={() => setImageScale(s => Math.max(0.5, s - 0.25))} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="缩小"
+                >
+                    <ZoomOut className="w-6 h-6" />
+                </button>
+                
+                <span className="text-white/50 text-xs font-mono w-12 text-center">{(imageScale * 100).toFixed(0)}%</span>
+
+                <button 
+                  onClick={() => setImageScale(s => Math.min(3, s + 0.25))} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="放大"
+                >
+                    <ZoomIn className="w-6 h-6" />
+                </button>
+                <button 
+                  onClick={() => setImageRotation(r => r + 90)} 
+                  className="text-white/80 hover:text-white transition-colors p-2"
+                  title="向右旋转"
+                >
+                    <RotateCw className="w-6 h-6" />
+                </button>
+            </div>
+        </div>
+      )}
 
       {/* Floating TOC Button */}
       {headings.length > 0 && (
@@ -245,32 +499,110 @@ export const PostDetail: React.FC<PostDetailProps> = ({ posts, updatePost, onDel
       {showTOC && (
         <div className="fixed inset-0 z-50 flex flex-col justify-end md:flex-row md:justify-end bg-black/20 backdrop-blur-sm" onClick={() => setShowTOC(false)}>
           <div 
-            className="w-full md:w-80 h-[60vh] md:h-full bg-white dark:bg-slate-900 shadow-2xl p-6 overflow-y-auto rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom md:slide-in-from-right duration-300"
+            className="w-full md:w-96 h-[70vh] md:h-full bg-white dark:bg-slate-900 shadow-2xl flex flex-col rounded-t-2xl md:rounded-none border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 animate-in slide-in-from-bottom md:slide-in-from-right duration-300"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="font-serif font-bold text-xl text-slate-900 dark:text-white">目录</h3>
-              <button onClick={() => setShowTOC(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full">
+            {/* Header */}
+            <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-3">
+                <h3 className="font-serif font-bold text-xl text-text-primary dark:text-[#f5ece0]">目录</h3>
+                <div className="flex bg-slate-100 dark:bg-slate-800 rounded-lg p-0.5">
+                  <button 
+                    onClick={() => setTocMaxLevel(2)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 2 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >简</button>
+                  <button 
+                    onClick={() => setTocMaxLevel(3)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 3 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >中</button>
+                  <button 
+                    onClick={() => setTocMaxLevel(6)}
+                    className={`px-2.5 py-1 rounded-md text-xs font-medium transition-all ${
+                      tocMaxLevel === 6 
+                        ? 'bg-white dark:bg-slate-700 text-text-primary dark:text-[#f5ece0] shadow-sm' 
+                        : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                    }`}
+                  >详</button>
+                </div>
+              </div>
+              <button onClick={() => setShowTOC(false)} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
                 <X className="w-5 h-5 text-slate-500 dark:text-slate-400" />
               </button>
             </div>
-            <nav className="space-y-1">
-              {headings.map((h, i) => (
-                <button 
-                  key={i} 
-                  onClick={() => {
-                    setShowTOC(false);
-                    document.getElementById(h.id)?.scrollIntoView({ behavior: 'smooth' });
-                  }}
-                  className={`block w-full text-left py-2 px-3 rounded-lg text-sm transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 ${h.level === 1 ? 'font-bold' : h.level === 2 ? 'pl-6' : 'pl-9 text-slate-500 dark:text-slate-400'}`}
-                >
-                  {h.text}
-                </button>
-              ))}
-            </nav>
+
+            {/* TOC Content */}
+            <div ref={tocContainerRef} className="flex-1 overflow-y-auto px-4 py-4">
+              <ul className="space-y-1 list-none m-0 p-0">
+                {headings.filter(h => {
+                  if (tocMaxLevel >= 6) return true;
+                  if (tocMaxLevel === 2) {
+                    // "简"模式：显示h1、h2，如果没有h1和h2则显示h3
+                    const hasH1orH2 = headings.some(hh => hh.level <= 2);
+                    return hasH1orH2 ? h.level <= 2 : h.level <= 3;
+                  }
+                  return h.level <= tocMaxLevel;
+                }).map((h, i) => {
+                  const isActive = h.id === currentHeadingId;
+
+                  let paddingLeft = 0;
+                  if (h.level === 2) paddingLeft = 16;
+                  else if (h.level === 3) paddingLeft = 32;
+                  else if (h.level === 4) paddingLeft = 48;
+                  else if (h.level >= 5) paddingLeft = 64;
+
+                  return (
+                    <li
+                      key={i}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (!h.id) return;
+                        pendingScrollId.current = h.id;
+                        setShowTOC(false);
+                      }}
+                      style={{ paddingLeft: `${paddingLeft}px` }}
+                      className={`py-2 px-3 rounded-lg text-sm transition-all cursor-pointer select-none ${
+                        isActive
+                          ? 'bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 font-semibold border-l-2 border-primary-500'
+                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-200 border-l-2 border-transparent'
+                      }`}
+                    >
+                      {h.text}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
           </div>
         </div>
       )}
+
+      {/* Bible Verse Modal */}
+      <BibleVerseModal
+        isOpen={showBibleModal}
+        onClose={() => setShowBibleModal(false)}
+        reference={selectedBibleReference}
+        version={bibleVersion}
+        onVersionChange={setBibleVersion}
+        isAdmin={isAdmin}
+      />
+
+      {/* Alert Modal */}
+      <AlertModal
+        isOpen={alertState.isOpen}
+        onClose={() => setAlertState(prev => ({ ...prev, isOpen: false }))}
+        title={alertState.title}
+        message={alertState.message}
+        type={alertState.type}
+      />
     </div>
   );
 };

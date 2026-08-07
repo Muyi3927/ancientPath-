@@ -85,6 +85,10 @@ app.get('/api/media/:folder/:filename', async (c) => {
     const headers = new Headers();
     object.writeHttpMetadata(headers);
     headers.set('etag', object.httpEtag);
+    // 确保浏览器内联显示而非下载
+    if (!headers.has('content-disposition')) {
+      headers.set('content-disposition', 'inline');
+    }
 
     return new Response(object.body, {
       headers,
@@ -132,6 +136,7 @@ app.get('/api/posts', async (c) => {
       categoryId: p.categoryId ? String(p.categoryId) : null,
       tags: p.tags ? JSON.parse(p.tags) : [],
       isFeatured: Boolean(p.isFeatured),
+      showOnHomepage: p.showOnHomepage !== 0,
       author: { username: p.authorName || 'Admin', role: 'ADMIN' } 
     }));
     
@@ -154,6 +159,7 @@ app.get('/api/posts/:id', async (c) => {
       ...post,
       tags: post.tags ? JSON.parse(post.tags as string) : [],
       isFeatured: Boolean(post.isFeatured),
+      showOnHomepage: post.showOnHomepage !== 0,
       author: { username: post.authorName || 'Admin', role: 'ADMIN' }
     };
     
@@ -170,7 +176,7 @@ app.post('/api/posts', async (c: any) => {
   try {
     const body = await c.req.json();
     // 前端传来的 ID 可能是新文章的 UUID (如果前端生成) 或旧文章的数字 ID
-    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author } = body;
+    const { id, title, excerpt, content, coverImage, categoryId, tags, isFeatured, audioUrl, author, showOnHomepage } = body;
     
     const now = Date.now();
     // --- 检查文章是否存在 ---
@@ -188,12 +194,13 @@ app.post('/api/posts', async (c: any) => {
         // tags comes as array from body, but stored as string in DB. existing.tags is string.
         const newTags = tags !== undefined ? JSON.stringify(tags) : existing.tags;
         const newIsFeatured = isFeatured !== undefined ? (isFeatured ? 1 : 0) : existing.isFeatured;
+        const newShowOnHomepage = showOnHomepage !== undefined ? (showOnHomepage ? 1 : 0) : (existing.showOnHomepage !== undefined ? existing.showOnHomepage : 1);
         const newAudioUrl = audioUrl ?? existing.audioUrl;
 
         await c.env.DB.prepare(`
-            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, audioUrl=?
+            UPDATE posts SET title=?, excerpt=?, content=?, coverImage=?, updatedAt=?, categoryId=?, tags=?, isFeatured=?, showOnHomepage=?, audioUrl=?
             WHERE id=?
-        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newAudioUrl, id).run();
+        `).bind(newTitle, newExcerpt, newContent, newCoverImage, now, newCategoryId, newTags, newIsFeatured, newShowOnHomepage, newAudioUrl, id).run();
         
         return c.json({ success: true, id: id });
 
@@ -201,9 +208,9 @@ app.post('/api/posts', async (c: any) => {
         // --- 插入新文章 (让数据库自动生成自增 ID) ---
         const tagString = JSON.stringify(tags || []);
         const result = await c.env.DB.prepare(`
-            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, audioUrl, authorName)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, audioUrl, author?.username || 'Admin').run();
+            INSERT INTO posts (title, excerpt, content, coverImage, createdAt, updatedAt, categoryId, tags, isFeatured, showOnHomepage, audioUrl, authorName)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).bind(title, excerpt, content, coverImage, now, now, categoryId, tagString, isFeatured ? 1 : 0, showOnHomepage !== false ? 1 : 0, audioUrl, author?.username || 'Admin').run();
 
         const newId = result.meta.last_row_id;
         
@@ -240,19 +247,27 @@ app.put('/api/upload', async (c) => {
       folder = 'audios/';
     }
 
-    // 生成文件名（时间戳 + 原文件名）
-    const safeName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+    // 生成文件名：日期 (YYMMDD) + 原文件名（保留中文）
+    const now = new Date();
+    const year = String(now.getFullYear()).slice(-2);
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}${month}${day}`;
+    const safeName = `${dateStr}-${file.name}`;
     const key = `${folder}${safeName}`;  // 关键：这里拼接文件夹
 
-    // 上传到 R2（key 包含文件夹）
+    // 上传到 R2（key 包含文件夹，可含中文）
     await c.env.BUCKET.put(key, file.stream(), {
-      httpMetadata: { contentType: file.type }
+      httpMetadata: {
+        contentType: file.type,
+        contentDisposition: `inline; filename*=UTF-8''${encodeURIComponent(file.name)}`,
+      }
     });
 
-    // 使用 Worker 代理作为公开 URL (解决自定义域名配置困难的问题)
-    // 格式: https://api.ancientpath.dpdns.org/api/media/images/xxx.png
+    // 构造公开 URL 时对文件名部分做 encodeURIComponent，
+    // 这样代理路由拿到参数后 decode 能还原出正确的 R2 key
     const requestUrl = new URL(c.req.url);
-    const publicUrl = `${requestUrl.origin}/api/media/${key}`;
+    const publicUrl = `${requestUrl.origin}/api/media/${folder}${encodeURIComponent(safeName)}`;
 
     return c.json({ url: publicUrl });
   } catch (e: any) {
@@ -347,6 +362,73 @@ app.delete('/api/posts/:id', async (c: any) => {
   } catch (e: any) {
     console.error('Delete post error:', e);
     return c.json({ error: e.message || String(e) }, 500);
+  }
+});
+
+// === Bible API ===
+
+// 9. 获取书卷列表
+app.get('/api/bible/books', async (c) => {
+  try {
+    const version = c.req.query('version') || 'cuv'; // cuv or asv
+    // 目前我们只把 BibleID 表导入了，BibleID 表其实是通用的书卷名，
+    // 如果要区分中英文书名 (CUV vs ASV)，可能需要两套 BibleID 数据或者扩展字段。
+    // 这里我们先返回 BibleID 的数据。如果需要英文名，目前 BibleID 有 ShortName/FullName (中文)。
+    // TODO: 如果需要英文书名，需要导入 ASV 的 BibleID 或者在 BibleID 表加英文列。
+    
+    // 假设 BibleID 表是共享的，或者目前只导入了中文书卷名。
+    const { results } = await c.env.DB.prepare('SELECT * FROM BibleID ORDER BY SN ASC').all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// 10. 获取经文
+app.get('/api/bible/verses', async (c) => {
+  try {
+    const book = c.req.query('book'); // VolumeSN (1-66)
+    const chapter = c.req.query('chapter'); // ChapterSN
+    const version = c.req.query('version') || 'cuv';
+
+    if (!book || !chapter) {
+      return c.json({ error: 'Missing book or chapter' }, 400);
+    }
+
+    // 查询指定版本、书卷、章节的经文
+    const query = `
+      SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection, SoundBegin, SoundEnd 
+      FROM Bible 
+      WHERE VolumeSN = ? AND ChapterSN = ? AND Version = ? 
+      ORDER BY VerseSN ASC
+    `;
+    const { results } = await c.env.DB.prepare(query).bind(book, chapter, version).all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
+  }
+});
+
+// 11. 搜索经文
+app.get('/api/bible/search', async (c) => {
+  try {
+    const q = c.req.query('q');
+    const version = c.req.query('version') || 'cuv';
+    
+    if (!q || q.length < 2) { // 限制搜索词长度
+       return c.json([]); 
+    }
+
+    const query = `
+      SELECT ID, VolumeSN, ChapterSN, VerseSN, Lection 
+      FROM Bible 
+      WHERE Lection LIKE ? AND Version = ? 
+      ORDER BY VolumeSN ASC, ChapterSN ASC, VerseSN ASC
+    `;
+    const { results } = await c.env.DB.prepare(query).bind(`%${q}%`, version).all();
+    return c.json(results);
+  } catch (e: any) {
+    return c.json({ error: e.message }, 500);
   }
 });
 

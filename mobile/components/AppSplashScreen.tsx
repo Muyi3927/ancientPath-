@@ -62,8 +62,8 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
   logo: {
-    width: 280,
-    height: 280,
+    width: 350,
+    height: 350,
   },
   title: {
     fontSize: 32,
@@ -79,7 +79,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#64748b', // Slate 500
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 32,
     fontFamily: 'serif', // Use serif for scripture
     marginBottom: 12,
   },
